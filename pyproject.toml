@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bump-on-tail"
+version = "0.1.0"
+description = "Neural closure models for the bump-on-tail instability."
+requires-python = ">=3.11"
+dependencies = [
+    "jax",
+    "equinox",
+    "optax",
+    "numpy",
+    "scipy",
+    "matplotlib",
+]
+
+[tool.setuptools.packages.find]
+include = ["bot*"]
+
+[project.optional-dependencies]
+gpu = [
+    "jax[cuda12]",
+]

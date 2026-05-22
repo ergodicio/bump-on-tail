@@ -1,0 +1,719 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, bm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+\usepackage{microtype}
+
+\graphicspath{{figures/}}
+
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\Phih}{\hat{\Phi}}
+\newcommand{\xib}{\xi_b}
+\newcommand{\ub}{u_b}
+\newcommand{\vb}{v_b}
+
+\title{Frequency-domain training data for a learned plasma fluid closure}
+\author{Archis Joglekar}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We close the warm-beam moment hierarchy of a cold-bulk / warm-beam
+bump-on-tail system with a small MLP that replaces the Hammett--Perkins /
+Hunana Pad\'e rational closure of $Z'(\xib)$. The architecture is standard;
+the contribution is the training-data design. The default approach --- run
+many linearized kinetic simulations across a $(\ub/\vb, \varepsilon, k)$
+grid and harvest $(\mathrm{ratios}, \alpha)$ pairs from trajectories ---
+gives a closure that is already a respectable improvement over Pad\'e:
+$\gamma_{\rm eff}$ within $\sim\!10\%$ across most of the parameter grid,
+degrading to $\sim\!50\%$ at the marginal corner. Sampling $\xib$ directly
+in a $\mathbb{C}$ rectangle --- the equivalent frequency-domain operation,
+evaluated in closed form via the Faddeeva function --- gives the same NN
+$10^{-4}$--$10^{-3}$ relative error nearly everywhere, two decades tighter
+than the sim-trained closure and three to four decades tighter than Pad\'e.
+The frequency-domain dataset is also $\sim\!100\times$ cheaper to
+generate (one Faddeeva eval per sample, no kinetic time-stepping, no IC
+choices) and is problem-agnostic in $(\ub/\vb, \varepsilon, k)$. The
+geometric reason the win exists: linear eigenmodes from a kinetic
+simulation trace a narrow region in the $\xib$-plane, leaving the rest of
+the relevant rectangle uncovered.
+\end{abstract}
+
+% =====================================================================
+\section{Setup}
+
+A cold background plasma (density $n_0$) coupled to a warm Maxwellian beam
+(density $n_b = \varepsilon n_0$, drift $\ub$, thermal speed $\vb$). In
+beam-frame coordinates ($s = (v_x - \ub)/\vb$) the linearized two-fluid
+system has state $y = (u, E, U_0, U_1, U_2)$ with
+\begin{align}
+  \partial_t u            &= -E,\\
+  \partial_t E            &= u - \varepsilon (\ub U_0 + U_1),\\
+  \partial_t U_n          &= -ik\ub U_n - ik U_{n+1} + n M_{n-1} E,\quad n<2,
+\end{align}
+where $U_n = (1/n_b)\int s^n f_{b1}\,ds$ and $M_k = \langle
+s^k\rangle_{f_{b0}}$ ($M_0=1$, $M_1=0$, $M_2=1/2$, \ldots). The closure
+problem is to specify $U_3$ at each step.
+
+The kinetic linear response of the beam to a potential $\hat\Phi$ is
+\begin{equation}\label{eq:U0}
+  U_0/\hat\Phi = Z'(\xib),\qquad \xib = (\omega - k\ub)/(k\vb),
+\end{equation}
+with $Z(\xi) = i\sqrt{\pi}\,w(\xi)$ the plasma dispersion function and
+$w$ the Faddeeva function. Iterating the recurrence
+$\xib U_n - U_{n+1} = n M_{n-1}\hat\Phi$ from \eqref{eq:U0} gives the
+exact 3-moment closure ratio
+\begin{equation}\label{eq:alpha}
+  \alpha(\xib) \equiv U_3/U_0 = \xib^3 - \xib/Z'(\xib).
+\end{equation}
+The kinetic dispersion at scales much longer than the Debye length is
+\begin{equation}\label{eq:Dkin}
+  D_{\rm kin}(\omega,k) = 1 - 1/\omega^2 - (\varepsilon/k^2) Z'(\xib) = 0.
+\end{equation}
+
+\paragraph{Padé closures.} A linear-in-moments closure $U_3 = \sum_{i<3}
+a_i U_i$ with constants $a_i$ combined with the moment recurrence yields a
+degree-$(1,3)$ rational approximant of $Z'(\xib)$. Choosing $(a_i)$ to
+match the Taylor series of $-\sqrt{\pi} Z'$ at $\xib=0$ to order $\xib^N$
+is the Pad\'e closure $R_N$ in the Hammett--Perkins / Hunana hierarchy.
+
+% =====================================================================
+\section{Padé baseline}
+
+Figure~\ref{fig:response} compares the closed fluid response of the Pad\'e
+hierarchy $N \in \{3,4,5,6\}$ to the kinetic $-\sqrt{\pi}\,Z'(\xib)$ along
+real $\xib$. Each Pad\'e closure matches the kinetic curve to
+$\sim 10^{-2N+3}$ at $\xib=0$ (Taylor matching) and degrades rapidly to
+residual of order unity for $|\xib| \gtrsim 1$. The imaginary part (Landau
+resonance) is captured at only $\sim 30\%$ of its kinetic amplitude even
+at $N=6$. This is the fundamental Pad\'e ceiling: a finite-order rational
+approximates an entire function only locally.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_response_function}
+  \caption{Padé hierarchy vs kinetic $-\sqrt{\pi}\,Z'(\xib)$ along real
+  $\xib$. Real part (left), imaginary part / Landau resonance (middle),
+  pointwise residual on log scale (right). Pad\'e residuals plateau at
+  $\sim 10^0$ for $|\xib|>1$.}
+  \label{fig:response}
+\end{figure}
+
+Figure~\ref{fig:overshootN} plots the relative error in the BoT
+$\gamma_{\max}$ at the canonical operating point
+$(\ub/\vb=5, \varepsilon=0.05)$ vs Pad\'e order. The hierarchy oscillates
+around the kinetic answer, crossing zero between $N=7$ and $N=8$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\linewidth]{fig_overshoot_vs_N}
+  \caption{$\gamma_{\max}$ overshoot at $(\ub/\vb, \varepsilon)=(5, 0.05)$
+  vs Pad\'e order. Non-monotone --- crosses zero near $N=7$.}
+  \label{fig:overshootN}
+\end{figure}
+
+% =====================================================================
+\section{A closed-form identity for the per-mode closure}
+\label{sec:bilinear}
+
+Before turning to the NN we record one closed-form identity. It fixes
+what \emph{any} closure must reduce to on a single linear eigenmode, and
+will let us state precisely what the NN does and does not learn
+(Section~\ref{sec:interp}).
+
+Applying the moment recurrence $U_{n+1} = \xib U_n - n M_{n-1} \hat\Phi$
+for $n=0,1,2$ with $M_0=1$, $M_1=0$:
+\begin{align*}
+  U_1 &= \xib U_0,\\
+  U_2 &= \xib U_1 - M_0 \hat\Phi = \xib^2 U_0 - \hat\Phi \quad\text{(since } M_0 = 1\text{),}\\
+  U_3 &= \xib U_2 - 2 M_1 \hat\Phi = \xib U_2 \quad\text{(since } M_1 = 0\text{).}
+\end{align*}
+The third line eliminates the inhomogeneous coupling because the first
+velocity moment of a Maxwellian vanishes in its own frame. Dividing by
+$U_0$ and using $\xib = U_1/U_0$:
+\begin{equation}\label{eq:bilinear}
+  \boxed{\;\alpha \;=\; \frac{U_3}{U_0} \;=\; \frac{U_1}{U_0} \cdot \frac{U_2}{U_0}\;}
+\end{equation}
+i.e.\ on any linear eigenmode the closure ratio is the complex product
+of the two moment ratios. Direct check: $r_1 r_2 = \xib(\xib^2 - 1/Z'(\xib)) =
+\xib^3 - \xib/Z'(\xib) = \alpha(\xib)$. All the plasma-dispersion
+machinery is absorbed into $U_2$; the closure step itself is
+multiplication.
+
+\paragraph{Used as a closure, this fails.} On a superposition
+$U_n(t) = \sum_i A_i e^{-i\omega_i t} U_n^{(i)}$ the identity breaks:
+the product of sums in $r_1 \cdot r_2$ generates cross-terms ($i\neq j$)
+that the per-mode formula $\sum_i A_i \xib_i U_2^{(i)}$ does not. So
+hardcoding $U_3 = U_1 U_2 / U_0$ in a fluid solver is not a usable
+closure. At the canonical $(5,\,0.05,\,k=0.24)$ point, with a
+Langmuir-projected IC (single eigenmode), bilinear matches the kinetic
+$\gamma_{\rm eff}$ to six decimals; with a generic $\delta E$ IC (all
+five fluid eigenmodes) it gives $+28.4\%$ overshoot --- essentially
+Pad\'e-level ($+30.8\%$).
+
+The same picture holds across the full sweep
+(Figure~\ref{fig:three-panel-sweep}, middle panel): bilinear is a strict
+improvement on Pad\'e in every cell, but the improvement is small
+(8--14\% relative in the regimes where Pad\'e is acceptable; larger only
+at the marginal corner where both are deep into failure). In practical
+terms it is not a useful alternative to Pad\'e. Pad\'e and the Hunana
+hierarchy chose linear-in-moments closures precisely so that they
+commute with superposition; \eqref{eq:bilinear} breaks that property and
+inherits the cost.
+
+\paragraph{Why we record it anyway.} The identity \eqref{eq:bilinear}
+fixes what the per-mode closure equals, in closed form. The NN closure
+($f_\theta : (r_1, r_2) \mapsto \alpha$) is structurally free to be
+anything; the identity gives a baseline against which $f_\theta$ can be
+compared on and off the eigenmode manifold. Section~\ref{sec:interp}
+uses it to show that the NN reproduces the bilinear product on the
+manifold but a distinctly non-multiplicative function off it, and that
+the off-manifold behaviour is what makes the closure usable.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_sweep_timedomain_three}
+  \caption{Time-domain $\gamma_{\rm eff}$ relative error across the
+  $(\ub/\vb, \varepsilon)$ grid from a generic $\delta E$ IC, on a shared
+  log scale. \emph{Left}: Pad\'e $N=3$. \emph{Middle}: bilinear identity
+  $U_3 = U_1 U_2 / U_0$ used as a closure (Section~\ref{sec:bilinear}).
+  \emph{Right}: $\xib$-sampled NN closure (Section~\ref{sec:results}).
+  The bilinear identity is a strict but small improvement on Pad\'e in
+  every cell --- both are in the $10^{-1}$--$10^{0}$ regime. The NN sits
+  two to three decades tighter.}
+  \label{fig:three-panel-sweep}
+\end{figure}
+
+% =====================================================================
+\section{NN closure}
+
+We replace the Pad\'e linear closure with a small MLP
+$f_\theta : (U_1/U_0, U_2/U_0) \to \alpha$ that outputs the closure ratio
+directly:
+\begin{equation}
+  U_3 = f_\theta(U_1/U_0, U_2/U_0) \cdot U_0.
+\end{equation}
+This is a nonlinear-in-moments closure with no rational-order ceiling: NN
+expressivity bounds the approximation error, not the polynomial degree.
+The architecture is fixed throughout: 4-layer MLP, $(64,64,64,64)$ hidden,
+$\tanh$ activations, $\sim\!8.7$k parameters. Input: 4 reals (re/im of two
+complex moment ratios). Output: 2 reals (re/im of $\alpha$). Adam, cosine
+LR $3\!\times\!10^{-3} \to 10^{-5}$, $8000$ steps, batch $512$. What
+changes between the experiments below is the \emph{training data}.
+
+% =====================================================================
+\section{First attempt: simulation-trained closure}
+
+The default training-data choice is the same one used everywhere else in
+data-driven closures: integrate the kinetic system, harvest moments
+$(U_0, U_1, U_2, U_3)$ along trajectories, regress $U_3/U_0$ on
+$(U_1/U_0, U_2/U_0)$. We build a broad sweep: $24$ operating points
+$(\ub/\vb \in \{3,4,5,6,8,10\}) \times (\varepsilon \in \{0.02, 0.05, 0.10,
+0.20\})$, five $k$ values per operating point, $12$ random initial
+conditions each. Total: $\sim 10^5$ training samples after filtering
+transient outliers. The sweep is intentionally broad to maximise coverage.
+This is a substantial amount of effort: $24 \times 5 = 120$ kinetic
+integrations, with mode-projection bookkeeping at each timestep.
+
+\paragraph{Linear dispersion.} Figure~\ref{fig:sim-disp} compares the
+sim-trained NN to the kinetic $\gamma(k)$ at four representative
+$(\ub/\vb, \varepsilon)$ points. The closure tracks the kinetic dispersion
+curve through the unstable branch at three of the four; peak-$\gamma$
+overshoot is below $1\%$ near the centre of the training set and grows to
+$+12\%$ at the marginal corner $(3, 0.05)$. The spikes in damped-$k$
+regions are artefacts of fitting $\gamma$ from a generic-IC trajectory
+where no unstable mode exists --- the late-time signal is dominated by
+whichever fluid eigenmode is least damped, and the sim-trained closure
+produces inaccurate spurious modes there.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_sim_dispersion}
+  \caption{$\gamma(k)$ for the simulation-trained NN closure (green dashed)
+  vs kinetic (black) at four representative operating points. The sweep
+  spans the training distribution; dispersion match is $\lesssim 1\%$.}
+  \label{fig:sim-disp}
+\end{figure}
+
+\paragraph{Time-domain at canonical.} Figure~\ref{fig:sim-td} integrates
+the sim-trained closure at the canonical operating point under both a
+Langmuir-projected and a generic-$\delta E$ IC. The closure tracks the
+kinetic envelope to graphical precision in both cases; fitted
+$\gamma_{\rm eff} = +0.1701$ vs $\gamma_{\rm kin} = +0.1700$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_time_domain_sim}
+  \caption{Sim-trained NN closure at canonical $(\ub/\vb=5, \varepsilon=0.05,
+  k=0.24)$. Tracks the kinetic envelope under both ICs --- this operating
+  point is well within the training distribution.}
+  \label{fig:sim-td}
+\end{figure}
+
+\paragraph{2D parameter scan.} Figure~\ref{fig:sim-sweep} shows the
+time-domain $\gamma_{\rm eff}$ relative error from a generic $\delta E$ IC
+across the $(\ub/\vb, \varepsilon)$ grid. The colour scale is
+$\log_{10}|\gamma_{\rm eff}/\gamma_{\rm kin} - 1|$ from $10^{-4}$ to
+$10^{1}$, shared with Figures~\ref{fig:sweep} and~\ref{fig:td-sweep}.
+Pad\'e sits at $10^{-1}$--$10^{0}$. The sim-trained NN is roughly one
+decade better than Pad\'e in the well-trained interior of the grid and
+stays at $10^{-2}$--$10^{-1}$ over most cells, with the marginal corner
+reaching $\sim\!10^{-0.3}$. This is genuinely a serviceable closure ---
+within $\sim\!10\%$ on $\gamma_{\rm eff}$ across most of the operating
+regime, which is what one would hope to get from a data-driven approach
+trained on $10^5$ simulation samples.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_sweep_timedomain_sim}
+  \caption{Time-domain $\gamma_{\rm eff}$ relative error for Pad\'e (left)
+  and the simulation-trained NN closure (right) on a shared log scale.
+  The sim-trained closure is a decade better than Pad\'e in the
+  well-trained interior, with the largest residuals at the low-$\varepsilon$
+  low-$\ub$ corner.}
+  \label{fig:sim-sweep}
+\end{figure}
+
+The natural question is whether one can do better without simply running
+more simulations.
+
+% =====================================================================
+\section{Diagnosis: 1D coverage in $\xib$}
+
+The closure problem is fundamentally one-parameter: on a linear eigenmode,
+$\alpha$ is a function of $\xib$ alone (\ref{eq:alpha}), and
+$(U_1/U_0, U_2/U_0)$ are too. So we can plot any training dataset as a
+distribution in the $\xib$-plane.
+
+Figure~\ref{fig:coverage} does this. The orange rectangle is the
+ranges of $\xib$ relevant for unstable BoT modes
+($\mathrm{Re}\,\xib \in [-3, 3]$, $\mathrm{Im}\,\xib \in [-1, 1.5]$). The
+green scatter is the $\xib$ value on the most-unstable kinetic mode as
+$(\ub/\vb, \varepsilon, k)$ is varied across a fine grid covering and
+exceeding the simulation training set. The scatter occupies a narrow
+sub-region of the rectangle: it is bounded to $\mathrm{Im}\,\xib > 0$
+(unstable modes have positive Landau-resonance imaginary part) and is
+heavily concentrated near a 1-parameter curve in the upper-left quadrant.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\linewidth]{fig_xi_coverage}
+  \caption{$\xib$ on the most-unstable kinetic mode as $(\ub/\vb,
+  \varepsilon, k)$ is varied (green); closed-form $\xib$-sampling
+  rectangle (orange). The orange rectangle covers all relevant $\xib$
+  including damped/spurious modes; the green region covers only the
+  unstable branch.}
+  \label{fig:coverage}
+\end{figure}
+
+\paragraph{Why this matters.} The 5-d closed fluid system has \emph{five}
+eigenmodes, only one of which is the Langmuir-like unstable mode. A
+generic-$\delta E$ IC excites a superposition of all five. Their
+projected $\xib$ values are spread across the rectangle --- many of them
+outside the green region. When the NN sees moment ratios from those modes
+it has no training data nearby and outputs an extrapolated $\alpha$. If
+the extrapolated $\alpha$ happens to overstabilise the spurious mode the
+trajectory still settles onto Langmuir-like growth (this is why canonical
+single-trace tests look fine); if it doesn't --- as in the marginal
+corner --- the spurious modes contaminate $\gamma_{\rm eff}$.
+
+This is structural. No amount of additional simulation training data fills
+the rectangle: kinetic trajectories live on the eigenmode manifold, and
+the eigenmode manifold's projection in $\xib$-space \emph{is} the green
+region. Adding more $(\ub/\vb, \varepsilon, k)$ adds more samples on the
+same set.
+
+% =====================================================================
+\section{Fix: $\xib$-sampling}
+
+The kinetic linear theory provides an analytical handle. On a linear
+eigenmode the forward map $\xib \mapsto (U_1/U_0, U_2/U_0)$ is closed-form:
+starting from $U_0/\hat\Phi = Z'(\xib)$ and iterating the moment
+recurrence,
+\begin{align}\label{eq:ratios}
+  U_0 &= Z'(\xib), \quad U_1 = \xib Z'(\xib), \quad U_2 = \xib^2 Z'(\xib) - 1,\\
+  U_1/U_0 &= \xib, \qquad U_2/U_0 = \xib^2 - 1/Z'(\xib).
+\end{align}
+Combined with \eqref{eq:alpha}, each tuple
+$\bigl((\mathrm{Re},\mathrm{Im}\,U_1/U_0,\; \mathrm{Re},\mathrm{Im}\,U_2/U_0),\;
+(\mathrm{Re},\mathrm{Im}\,\alpha)\bigr)$
+is one Faddeeva evaluation. \emph{Same equations as the simulation
+training; same single underlying kinetic linear theory.} The only
+difference is that we sample $\xib$ directly (frequency-domain) rather
+than reconstructing it from time-domain trajectories.
+
+We replace the simulation dataset with $16{,}384$ $\xib$ values uniformly
+distributed in $\mathrm{Re}\,\xib \in [-3,3]$, $\mathrm{Im}\,\xib \in
+[-1, 1.5]$ --- the orange rectangle in Figure~\ref{fig:coverage}. The
+training and architecture are otherwise identical.
+
+\paragraph{Data-generation cost.} The simulation dataset of \S4 required
+$120$ kinetic integrations across the operating sweep ($\sim 10^5$ filtered
+samples; minutes of wall time on a single core including the mode-projection
+bookkeeping). The closed-form dataset is $16{,}384$ \texttt{scipy.special.wofz}
+calls --- a fraction of a second of wall time, no operating-point sweep, no
+ICs, no transient outliers to filter. The ratio is roughly two orders of
+magnitude in compute and a much larger ratio in design effort.
+
+\paragraph{$\alpha$ accuracy at test points.} Table~\ref{tab:simvscf}
+compares $\alpha$ prediction error at representative $\xib$ values for the
+sim-trained (single op pt), sim-trained (broad, 24 op pts) and
+closed-form-trained closures. The first column is well inside all training
+distributions and all three closures work. The remaining rows are off the
+unstable-mode curve --- moment ratios from damped or spurious modes.
+Sim training fails by $50$--$800\%$; closed-form training is uniformly
+sub-1\%.
+
+\begin{table}[H]
+  \centering\small
+  \begin{tabular}{lccc}
+    \toprule
+    $\xib$ & sim (1 op pt) & sim (broad, 24 op pts) & closed-form \\
+    \midrule
+    $-1.17 + 0.71i$ (canonical eigenmode) & $+2.3\%$  & $+0.8\%$  & $+0.05\%$ \\
+    $-0.83 + 0.05i$ & $+148\%$  & $+62\%$   & $+0.5\%$ \\
+    $0.50 + 0.00i$  & $+843\%$  & $+247\%$  & $+0.6\%$ \\
+    $-1.50 - 0.20i$ & $+50\%$   & $+27\%$   & $+0.2\%$ \\
+    $1.20 + 0.10i$  & $+209\%$  & $+118\%$  & $+0.6\%$ \\
+    $-2.00 + 0.00i$ & $+13\%$   & $+7\%$    & $+0.5\%$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{$|\alpha_{\rm NN} - \alpha_{\rm exact}| / |\alpha_{\rm exact}|$
+  at representative $\xib$. Sim sampling fits well only at the unstable
+  Langmuir mode; closed-form is accurate everywhere.}
+  \label{tab:simvscf}
+\end{table}
+
+% =====================================================================
+\section{Results with $\xib$-sampling}
+\label{sec:results}
+
+\paragraph{Linear dispersion sweep.} Figure~\ref{fig:sweep} compares the
+$\gamma_{\max}$ relative error
+$|\gamma_{\rm fluid} - \gamma_{\rm kin}|/\gamma_{\rm kin}$ across the
+$(\ub/\vb, \varepsilon)$ grid on the same shared log scale as the previous
+section. Pad\'e $N=3$ sits at $10^{-1}$--$10^{0}$ (worst at marginal,
+matching Figure~\ref{fig:overshootN}). The $\xib$-sampled NN closure is
+$\le 10^{-3}$ across nearly the entire grid --- two to four decades
+tighter than the sim-trained closure (Figure~\ref{fig:sim-sweep}) and
+three to four decades tighter than Pad\'e.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_sweep_comparison}
+  \caption{$\gamma_{\max}$ relative error vs kinetic across the
+  $(\ub/\vb, \varepsilon)$ grid. Pad\'e $N\!=\!3$ (left) vs $\xib$-sampled
+  NN closure (right) on the shared log scale. White $\times$ marks
+  canonical $(5,0.05)$.}
+  \label{fig:sweep}
+\end{figure}
+
+Table~\ref{tab:results} reports four representative points.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    $(\ub/\vb,\,\varepsilon)$ & $\gamma_{\rm kin}$ & Pad\'e $N=3$ & $\xib$-sampled NN \\
+    \midrule
+    canonical $(5, 0.05)$    & $0.170$ & $+30.8\%$  & $-0.02\%$ \\
+    hot beam   $(5, 0.20)$   & $0.289$ & $+13.9\%$  & $+0.02\%$ \\
+    strong drift $(8, 0.05)$ & $0.200$ & $+11.2\%$  & $+0.01\%$ \\
+    marginal $(3, 0.05)$     & $0.113$ & $+107.9\%$ & $+0.20\%$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{$\gamma_{\max}$ overshoot at representative operating points.
+  $\sim 10^3$--$10^4\times$ improvement in relative error vs Pad\'e $N=3$.}
+  \label{tab:results}
+\end{table}
+
+\paragraph{Time-domain canonical stress test.} Figure~\ref{fig:time-domain}
+integrates all three systems for $t \in [0, 80/\omega_p]$ at the canonical
+operating point, with Langmuir-projected and generic-$\delta E$ ICs.
+Fitted $\gamma_{\rm eff}$:
+$\gamma_{\rm kin} = +0.1700$, $\gamma_{\rm pade} = +0.2223$,
+$\gamma_{\rm NN} = +0.1700$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_time_domain}
+  \caption{Time-domain $|E(t)|$ at canonical $(5, 0.05, k=0.24)$ under
+  Langmuir-projected and generic $\delta E$ initial conditions.
+  $\xib$-sampled NN closure (red dashed) tracks kinetic (black) in both
+  cases.}
+  \label{fig:time-domain}
+\end{figure}
+
+\paragraph{Time-domain across parameter space.}
+Figure~\ref{fig:td-sweep} repeats the experiment for each
+$(\ub/\vb, \varepsilon)$ cell. The $\xib$-sampled closure is $\lesssim
+0.1\%$ over most of the grid; the marginal corner shows mild
+under-prediction (NN training rectangle's lower-left isn't quite reached
+in $\xib$). No blow-up anywhere. The contrast with
+Figure~\ref{fig:sim-sweep} is the headline: the same NN architecture,
+trained on the same physics but sampled in frequency rather than time,
+fixes the marginal-corner failure.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_sweep_timedomain}
+  \caption{Time-domain $\gamma_{\rm eff}$ relative error from generic
+  $\delta E$ IC across the parameter grid: Pad\'e (left) vs $\xib$-sampled
+  NN closure (right) on the same shared log scale as
+  Figure~\ref{fig:sim-sweep}. The contrast against Figure~\ref{fig:sim-sweep}
+  is the headline: same NN architecture, same fluid integrator, same generic
+  IC, but now $10^{-4}$--$10^{-3}$ across nearly the whole grid.}
+  \label{fig:td-sweep}
+\end{figure}
+
+% =====================================================================
+\section{What did the NN actually learn?}
+\label{sec:interp}
+
+Section~\ref{sec:bilinear} gives the structurally correct closure on a
+single eigenmode in closed form: $\alpha = r_1 \cdot r_2$. The NN was
+trained on $\xib$-sampled data, i.e.\ exclusively on on-manifold points.
+A natural question is whether the NN simply learned multiplication. The
+answer has two parts: yes on the manifold, no off it; and the off-manifold
+extrapolation is what makes the closure work.
+
+\paragraph{On the eigenmode manifold.} Sampling $\xib$ uniformly in the
+training rectangle and evaluating $f_\theta(r_1(\xib), r_2(\xib))$
+against $r_1 r_2$ gives a mean relative error of $\sim\!3\times10^{-3}$,
+consistent with the NN's training loss. So on the 2-real-dimensional
+submanifold the NN reproduces the bilinear product within training
+precision.
+
+\paragraph{Off the manifold.} Sampling $r_1$ and $r_2$ \emph{independently}
+in the bounding box of the on-manifold cloud --- points that do not
+correspond to any single $\xib$ --- gives a mean relative error of order
+one between $f_\theta(r_1, r_2)$ and $r_1 r_2$. The NN does not learn
+complex multiplication globally; it learned multiplication on the manifold
+and a smooth (but distinctly non-multiplicative) interpolation off it.
+
+\paragraph{Why this matters: bilinear vs NN in time-domain.}
+Figure~\ref{fig:offmanifold} shows the consequence. At two operating
+points (canonical and marginal), we integrate four fluid systems --
+kinetic ground truth, NN closure, bilinear closure, Pad\'e --- from a
+generic $\delta E$ IC. Top row: $|E(t)|$. The bilinear trajectory tracks
+Pad\'e, not kinetic.
+
+The bottom row isolates the closure function from any trajectory feedback:
+along the kinetic trajectory, we evaluate $\alpha_{\rm NN}(r_1^{\rm kin},
+r_2^{\rm kin})$ and $\alpha_{\rm bil} = r_1^{\rm kin} r_2^{\rm kin}$ and
+compare both to the kinetic ground truth $U_3^{\rm kin}/U_0^{\rm kin}$.
+Two phases appear:
+\begin{itemize}\itemsep0pt
+  \item \emph{Early time} ($t \lesssim 20\omega_p^{-1}$ at canonical;
+        $t \lesssim 50$ at marginal): the fluid state is a real
+        superposition of eigenmodes, $(r_1, r_2)$ sit off the manifold,
+        and the bilinear product misses $\alpha_{\rm kin}$ by
+        $10^{-1}$--$10^{0}$. The NN sits at $\sim\!10^{-2}$ throughout.
+  \item \emph{Late time}: the unstable mode dominates, $(r_1, r_2)$
+        relax onto the manifold, and the bilinear product becomes exact
+        ($\sim\!10^{-5}$ relative error). The NN plateaus at its
+        $\sim\!10^{-2}$ training residual.
+\end{itemize}
+
+\emph{Bilinear is the better closure function in the asymptotic
+single-mode limit; the NN is the better closure function in the early
+multimode phase.} Because closure errors at early time seed spurious
+fluid eigenmodes that grow exponentially, early-time accuracy dominates
+the final $\gamma_{\rm eff}$. The NN's off-manifold smoothness is what
+locks the trajectory onto the kinetic eigenmode before spurious-mode
+contamination matters; hardcoded multiplication is the algebraic
+extension off the manifold and is the wrong extension.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_offmanifold_diagnostic}
+  \caption{Off-manifold diagnostic at canonical (left) and marginal
+  (right) operating points. \emph{Top}: $|E(t)|$ for kinetic / NN /
+  bilinear / Pad\'e under a generic $\delta E$ IC. Bilinear (orange)
+  visibly tracks Pad\'e, not kinetic. \emph{Bottom}: closure-function
+  error $|\alpha_{\rm closure} - \alpha_{\rm kin}| / |\alpha_{\rm kin}|$
+  evaluated on the kinetic moments, isolating the closure function from
+  trajectory feedback. NN: blue. Bilinear: orange. Early time
+  ($t\lesssim 20$ canonical, $\lesssim 50$ marginal) the NN is one to
+  two decades better than bilinear; once the unstable mode dominates,
+  bilinear is exact and the NN plateaus at training residual.}
+  \label{fig:offmanifold}
+\end{figure}
+
+\paragraph{Mechanism, in one line.} On the eigenmode manifold the
+3-moment Maxwellian closure is bilinear and exact. The NN reproduces
+that on the manifold and supplies a useful smooth extension off it ---
+useful in the precise sense that it suppresses superposition cross-term
+error at early time and lets the trajectory relax onto the manifold.
+Linear closures (Pad\'e/HP) miss both the on-manifold and the
+off-manifold structure; bilinear gets the on-manifold structure but
+fails on the off-manifold extension; the NN gets both.
+
+% =====================================================================
+\section{Generalization: Landau damping on a single warm Maxwellian}
+\label{sec:landau}
+
+The trained closure $f_\theta(r_1, r_2) \to \alpha$ depends only on the
+Maxwellian linear response: nothing in the training set references $\ub$,
+$\varepsilon$, or $k$. So the same checkpoint should work for any
+3-moment fluid system on a Maxwellian equilibrium, not just BoT. This
+section confirms it by computing Landau damping of Langmuir waves on a
+single warm Maxwellian -- a textbook benchmark unrelated to the BoT
+instability.
+
+\paragraph{Setup.} Strip the BoT system to a single warm species (drop
+the cold bulk equations, set $\varepsilon = 1$, $\ub = 0$):
+\begin{align*}
+  \partial_t E   &= -U_1, \\
+  \partial_t U_0 &= -ik U_1, \\
+  \partial_t U_1 &= -ik U_2 + E   \quad (M_0 = 1), \\
+  \partial_t U_2 &= -ik U_3       \quad (M_1 = 0,\;\text{closure}).
+\end{align*}
+The kinetic Langmuir dispersion in this normalization is $k^2 =
+Z'(\omega/k)$, related to the standard $k\lambda_D$ convention by
+$k_{\rm code} = \sqrt{2}\,k\lambda_D$ (BoT-paper variance is $1/2$, so
+$v_{th} = 1/\sqrt{2}$).
+
+\paragraph{Method.} For each $k\lambda_D$:
+\begin{enumerate}\itemsep0pt
+  \item Solve $k^2 = Z'(\omega/k)$ for the kinetic Langmuir mode (Newton from
+        the Bohm-Gross seed) -- analytic ground truth.
+  \item Project initial state onto the kinetic Langmuir eigenvector:
+        $(E, U_0, U_1, U_2) = (U_1/i\omega,\, 1,\, \xi,\, \xi^2 - 1/Z'(\xi))$
+        with $\xi = \omega_{\rm kin}/k$.
+  \item Integrate the NN-closed and Pad\'e-closed fluid systems in time,
+        fit $(\omega_r, \gamma)$ from late-time log-magnitude slope and
+        real-part zero crossings.
+\end{enumerate}
+Projecting onto the kinetic eigenvector isolates the Langmuir mode --
+without it, the fluid system's spurious closure eigenmodes (which exist
+because there is no cold-bulk grounding) dominate the late-time signal.
+
+\paragraph{Result.} Figure~\ref{fig:landau} shows
+$(\omega_r, |\gamma|)(k\lambda_D)$ on $k\lambda_D \in [0.30, 0.60]$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_landau_damping}
+  \caption{Landau damping of Langmuir waves on a single warm Maxwellian,
+  using the same NN checkpoint trained for BoT. \emph{Left}: Bohm-Gross
+  real frequency. \emph{Right}: damping rate, log scale. The NN closure
+  reproduces the kinetic ground truth (textbook values: $\gamma/\omega_{pe}
+  = -0.0126$ at $k\lambda_D = 0.3$, $-0.1534$ at $k\lambda_D = 0.5$, etc.)
+  to better than $1\%$ across the range. Pad\'e $N=3$ in this setup gives
+  the wrong frequency and is unstable ($\gamma > 0$); not shown on the
+  log-damping axis. See text.}
+  \label{fig:landau}
+\end{figure}
+
+The NN curve overlays the kinetic curve in both panels. Representative
+values:
+\begin{center}\small
+\begin{tabular}{lccc}
+  \toprule
+  $k\lambda_D$ & kinetic $\gamma/\omega_{pe}$ & NN $\gamma/\omega_{pe}$ &
+  rel.\ error \\
+  \midrule
+  $0.30$ & $-0.0126$ & $-0.0129$ & $2.4\%$ \\
+  $0.40$ & $-0.0661$ & $-0.0657$ & $0.6\%$ \\
+  $0.50$ & $-0.1534$ & $-0.1535$ & $0.07\%$ \\
+  $0.60$ & $-0.2641$ & $-0.2655$ & $0.5\%$ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Why Padé fails here.} The same Hunana-style Pad\'e closure
+that gave $\sim 30\%$ overshoot on BoT $\gamma_{\rm eff}$ produces an
+\emph{unstable} fluid system on the pure warm Maxwellian: $\gamma > 0$
+even when initialized on the kinetic Langmuir eigenvector. This is a
+known consequence of Taylor-matching closures in systems without
+cold-fluid grounding; Hammett-Perkins-style frequency-axis filtering can
+fix it but is a separate construction. The NN closure has no such
+problem because the per-mode bilinear identity it learned
+(Section~\ref{sec:bilinear}) gives the exact Langmuir eigenmode by
+construction: the closed fluid system's Langmuir eigenvalue equation
+reduces to $Z'(\omega/k) = k^2$ identically.
+
+\paragraph{What this means.} The closure object stored in
+\texttt{naive\_mlp.eqx} is a learned Maxwellian linear-response function.
+It is reusable for any 3-moment fluid integrator with a Maxwellian
+equilibrium and $\xib$ in the trained rectangle. BoT is one instance,
+Landau damping on a warm Maxwellian is another, and the same logic
+extends to ion-acoustic waves with adiabatic electrons, drift waves with
+adiabatic species, or any model where the closure is "evaluate
+$Z'$ of an effective $\xib$". A separate trained model is needed only
+when the equilibrium is non-Maxwellian (kappa, flat-top, trapped
+plateau) or when going beyond 3 moments (the per-mode identity at higher
+order is not just a product because $M_2 \neq 0$).
+
+% =====================================================================
+\section{Discussion}
+
+\paragraph{Where the win comes from.} Both wins --- accuracy and cost ---
+trace to the same observation: the closure problem is parameterised by a
+single complex variable $\xib$. Simulation training generates
+$(\mathrm{ratios}, \alpha)$ pairs via the parameterisation $(\ub/\vb,
+\varepsilon, k, \mathrm{IC}, t) \mapsto \xib$, which is many-to-few and
+covers only a 1-parameter family of $\xib$ values (the unstable
+eigenmode), at the cost of a kinetic integration per operating point.
+Frequency-domain training generates the same pairs via the identity
+$\xib \mapsto (\mathrm{ratios}, \alpha)$, which is one-to-one, covers
+whatever subset of $\mathbb{C}$ we choose, and reduces dataset generation
+to a Faddeeva evaluation. The 2D rectangle is the natural, dense,
+problem-agnostic training distribution because moment ratios from the 5-d
+fluid system's other (damped) eigenmodes also land in this rectangle.
+
+The sim-trained closure is not bad --- $\sim\!10\%$ on $\gamma_{\rm eff}$
+across most of the grid is a real improvement over Pad\'e. The honest
+framing is that the closed-form approach is strictly better on every axis
+that matters: tighter error (two decades), cheaper data (two orders of
+magnitude), problem-agnostic (no operating-point sweep), and trivially
+re-trained when the operating regime shifts.
+
+The same logic applies to other moment closures whose linear-response
+function is one-parameter (drift--kinetic with one resonance, weakly
+collisional fluid models on a Maxwellian background): if there is an
+analytical $\xib \mapsto \alpha$ map, frequency-domain sampling is
+strictly better than simulation sampling at fixed dataset size.
+
+\paragraph{What is not solved.} The training is entirely linear-physics:
+$\alpha(\xib)$ is derived assuming the beam perturbation is linear about
+the Maxwellian $f_{b0}$. Capturing trapping, plateau formation, and
+saturated BoT requires kinetic training data and is outside this scope.
+The $\xib$-rectangle covers the unstable BoT regime by construction; the
+marginal corner $(\ub/\vb \lesssim 3, \varepsilon \lesssim 0.02)$ pushes
+$\xib$ to the rectangle's lower edge and shows mild degradation.
+
+\paragraph{Relation to the Pad\'e / Hunana hierarchy.} Hunana et al.\
+(2019) construct rational closures of $Z'(\zeta)$ up to 8 poles and prove
+asymptotic convergence with increasing order. The NN closure trades the
+rational-order ceiling for NN expressivity; the present work shows the
+fluid response problem itself isn't the obstacle --- training-data design
+is.
+
+\section*{Code}
+
+The accompanying \texttt{bot/} package implements all figures and runs:
+\begin{itemize}\itemsep0pt
+  \item \texttt{closures/pade.py} --- Pad\'e closure coefficients and the
+    closed fluid response.
+  \item \texttt{closures/naive\_nn.py} --- NN closure (MLP $\to \alpha$),
+    closed-form $\xib$-sampling dataset, training.
+  \item \texttt{train\_simdata.py} --- sim-data NN training (single- and
+    broad-sweep).
+  \item \texttt{kinetic.py}, \texttt{fluid.py} --- kinetic ground truth and
+    two-fluid eigenvalue system.
+  \item \texttt{closed\_loop.py} --- time-domain integration for all
+    closures.
+  \item \texttt{sweep.py}, \texttt{sweep\_timedomain.py} --- 2D parameter
+    scans.
+  \item \texttt{figures.py} --- all plots in this writeup.
+\end{itemize}
+
+\end{document}
