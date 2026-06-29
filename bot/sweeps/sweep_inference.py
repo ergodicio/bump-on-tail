@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     results = run_grid(u_b_vals, eps_vals)
 
-    out = Path(__file__).resolve().parent / "runs" / "sweep_inference.npz"
+    out = Path(__file__).resolve().parent.parent / "runs" / "sweep_inference.npz"
     np.savez_compressed(out, **results)
     print(f"\nsaved {out}")
 

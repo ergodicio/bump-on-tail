@@ -1,17 +1,40 @@
 """Padé closure for the N-moment bump-on-tail beam fluid.
 
-Beam moment hierarchy from linearized Vlasov + integration by parts:
+Beam moment hierarchy from linearised Vlasov + integration by parts:
     xi U_n - U_{n+1} = n M_{n-1} Phi      n = 0, ..., N-1
 with M_k = <s^k>_{f_b0} Maxwellian moments (M_0 = 1, M_1 = 0, M_2 = 1/2, ...).
 
-A linear closure U_N = sum_{i<N} a_i U_i yields a rational approximant of the
-kinetic response U_0/Phi = -sqrt(pi) Z'(xi). The Padé closure picks (a_i) to
-match the Taylor expansion of -sqrt(pi) Z'(xi) at xi=0 to order N.
+The kinetic beam response (derived from Vlasov with Maxwellian beam f_b0) is
+    U_0/Phi = Z'(xi_b)
+where Z' = -2(1 + xi Z(xi)) is the derivative of the plasma dispersion function
+and xi_b = (omega - k u_b)/(k v_b).  This is consistent with the kinetic
+dispersion  D = 1 - 1/omega^2 - (eps/k^2) Z'(xi_b) = 0  in kinetic.py.
 
-For N=3 the closure has three complex coefficients and produces a 3-pole
-rational of degree (1, 3) in xi. This is the BoT analog of HP-class closures
-(Hunana's R_3,2 family; specific coefficients differ from Maxwellian-bulk HP
-because the dimensionless freq variable here is xi_b = (omega - k u_b)/(k v_b)).
+For N = 3, the linear closure U_3 = a_0 U_0 + a_1 U_1 + a_2 U_2 yields the
+rational approximant
+    U_0/Phi = (xi - a_2) / (xi^3 - a_2 xi^2 - a_1 xi - a_0)
+which always behaves as +1/xi^2 for large xi, matching the leading term of
+    Z'(xi) ~ 1/xi^2 + 3/(2 xi^4) + 15/(4 xi^6) + ...   (large-arg)
+
+HP (Hammett-Perkins 1990) construction for N = 3
+-------------------------------------------------
+Following HP1990 (Eq. 9 with mu_1=0, Gamma=3, chi_1=2/sqrt(pi)):
+
+  1. Large-argument O(1/xi^4) term forces  a_1 = 3/2   (Gamma=3 analogue).
+  2. The relation  a_0 = -a_2/2  comes from the correct high-frequency
+     structure of the closure  (mu_1=0 analogue).
+  3. Matching Im[Z'(0+)] to model Landau damping gives  a_2 = -2i/sqrt(pi)
+     (chi_1 = 2/sqrt(pi) analogue).
+
+Result:
+    a = (a_0, a_1, a_2) = (i/sqrt(pi),  3/2,  -2i/sqrt(pi))
+
+Verification:
+  * Z'(0) = -2;   f(0) = a_2/a_0 = (-2i/sqrt(pi))/(i/sqrt(pi)) = -2  ✓
+  * Large arg:  f(xi) = 1/xi^2 + (3/2)/xi^4 + O(1/xi^6)  ✓
+  * Small arg:  f(xi) ≈ -2 - 2i*sqrt(pi)*xi  =  Z'(xi)|_{xi→0}  ✓
+
+For N != 3 a Taylor-at-zero matching to Z'(xi) is used as a fallback.
 """
 
 from __future__ import annotations
@@ -32,29 +55,22 @@ def maxwellian_moment(k: int) -> float:
     return factorial(2 * j) / (4**j * factorial(j))
 
 
-def _kinetic_taylor(K: int) -> np.ndarray:
-    """First K Taylor coefficients c_0..c_{K-1} of -sqrt(pi) Z'(xi) at xi=0.
+def _zprime_taylor(K: int) -> np.ndarray:
+    """First K Taylor coefficients c_0..c_{K-1} of Z'(xi) at xi=0.
 
-    Z(xi) coefficients:
-        z_{2n}   = i sqrt(pi) (-1)^n / n!
-        z_{2n+1} = -2 (-1)^n / (3/2)_n
-    Then c_0 = 2 sqrt(pi), c_k = 2 sqrt(pi) * z_{k-1} (since Z' = -2 - 2 xi Z).
+    Recurrence (from Z^{(n+1)}(0) = -2n Z^{(n-1)}(0)):
+        c_n = -2 c_{n-2} / (n-1)   for n >= 2
+    with  c_0 = Z'(0) = -2,  c_1 = Z''(0)/1! = -2i sqrt(pi).
     """
-    z = np.zeros(K, dtype=complex)
-    for k in range(K):
-        if k % 2 == 0:
-            n = k // 2
-            z[k] = 1j * SQRT_PI * (-1) ** n / factorial(n)
-        else:
-            n = (k - 1) // 2
-            poch = 1.0
-            for j in range(n):
-                poch *= 1.5 + j        # (3/2)_n
-            z[k] = -2.0 * (-1) ** n / poch
     c = np.zeros(K, dtype=complex)
-    c[0] = 2.0 * SQRT_PI
-    for k in range(1, K):
-        c[k] = 2.0 * SQRT_PI * z[k - 1]
+    if K == 0:
+        return c
+    c[0] = -2.0
+    if K == 1:
+        return c
+    c[1] = -2.0j * SQRT_PI
+    for n in range(2, K):
+        c[n] = -2.0 * c[n - 2] / (n - 1)
     return c
 
 
@@ -72,11 +88,24 @@ def _Q_taylor(N: int, K: int) -> np.ndarray:
 
 
 def pade_coefficients(N: int) -> np.ndarray:
-    """Padé closure: solve a so fluid_U0(xi; a) matches -sqrt(pi) Z'(xi) to O(xi^N).
+    """Padé closure coefficients a = (a_0, ..., a_{N-1}) for the N-moment beam fluid.
 
-    Returns array of complex coefficients (a_0, ..., a_{N-1}).
+    For N=3: uses the Hammett-Perkins (1990) construction — large-argument
+    asymptotic matching first, then small-argument imaginary matching for
+    Landau damping.  See module docstring for derivation.
+
+    For N != 3: falls back to Taylor-at-zero matching of the rational
+    U_0/Phi to Z'(xi) (the correct kinetic target).
     """
-    c = _kinetic_taylor(N)
+    if N == 3:
+        chi1 = 2.0 / SQRT_PI          # = 2/sqrt(pi)
+        a0   =  0.5j * chi1            # = i/sqrt(pi)
+        a1   =  1.5                    # = 3/2
+        a2   = -1j  * chi1            # = -2i/sqrt(pi)
+        return np.array([a0, a1, a2], dtype=complex)
+
+    # General N: Taylor matching at xi=0 for Z'(xi)
+    c = _zprime_taylor(N)
     Q = _Q_taylor(N, N)
     A = np.zeros((N, N), dtype=complex)
     b = np.zeros(N, dtype=complex)
@@ -105,7 +134,7 @@ def fluid_U0(xi, a) -> np.ndarray:
         M[..., n, n + 1] = -1.0
         b[n] = n * maxwellian_moment(n - 1) if n > 0 else 0.0
     M[..., N - 1, N - 1] = xi
-    M[..., N - 1, :] -= a[None, :] if xi.ndim == 0 else a
+    M[..., N - 1, :] -= a          # fix: broadcast correctly for scalar and array xi
     b[N - 1] = (N - 1) * maxwellian_moment(N - 2) if N > 0 else 0.0
     U = np.linalg.solve(M, b)
     return U[..., 0]

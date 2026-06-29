@@ -27,6 +27,7 @@ from bot.closures.naive_nn import (load as load_naive,
                                     naive_U3_over_U0, naive_predict_alpha)
 from bot.train_simdata import load as load_simdata
 from bot.closures.pade import maxwellian_moment, pade_coefficients
+from bot.closures.u2 import beta as _u2_beta, model_beta as _u2_model_beta, MLP_u2
 from bot.fluid import fluid_system
 from bot.kinetic import (kinetic_system_sspace, most_unstable_kinetic, s_grid,
                           SQRT_PI)
@@ -154,6 +155,70 @@ def sim_evolve(k: float, u_b: float, eps: float, model,
                 rtol: float = 1e-8, atol: float = 1e-10) -> np.ndarray:
     """Return E(t) using the simulation-trained NN closure."""
     return naive_evolve(k, u_b, eps, model, t_grid, y0, rtol, atol)
+
+
+# ----- safeguard for Z'-based closures (beta, alpha, NN-of-xi) ------------
+# Off the single-eigenmode manifold, U_0(t) can pass through a near-zero
+# "node" from destructive interference between superposed modes with
+# different complex frequencies (e.g. two-mode mixing ICs).  At that node
+# U_1/U_0 races to large |Im|, where Z'(xi) grows like exp(Im(xi)^2) and
+# overflows within a handful of RK45 steps, collapsing the adaptive step
+# size ("Required step size is less than spacing between numbers").  The
+# closure value itself stays finite (beta(xi) -> xi^2 as Z'(xi) -> inf), but
+# the speed at which xi sweeps through huge values makes the ODE locally
+# stiff.  Clipping |xi_hat| bounds this without affecting normal eigenmode
+# dynamics (|xi_b| is O(1) for every physically relevant case in this repo).
+
+_XI_RATIO_MAX = 12.0
+
+
+def _safe_xi_ratio(U1: complex, U0: complex, U0_floor: float = 1e-15,
+                    max_mag: float = _XI_RATIO_MAX) -> complex:
+    """Return U_1/U_0, clipped in magnitude to avoid feeding a Z'-based
+    closure an argument that blows up near a U_0 node."""
+    if abs(U0) < U0_floor:
+        return 0.0 + 0.0j
+    xi = U1 / U0
+    mag = abs(xi)
+    if mag > max_mag:
+        xi = xi * (max_mag / mag)
+    return xi
+
+
+# ----- DIRECT ALPHA closure (analytic, zero-parameter) --------------------
+# Apply the exact per-mode formula alpha(xi) = xi^3 - xi/Z'(xi) at xi=U1/U0.
+# This uses only r_1 = U1/U0 (ignoring U2 as a closure input), exactly as the
+# N=2 direct-beta closure uses beta(U1/U0).  On a single eigenmode r_1 = xi_b
+# so the closure is exact; off-manifold it commits a Jensen-type error.
+# This is DISTINCT from the bilinear closure below, which uses r_1 * r_2.
+
+def _direct_alpha_rhs(t, y_real, k: float, u_b: float, eps: float):
+    y = y_real[:5] + 1j * y_real[5:]
+    u, E, U0, U1, U2 = y
+    U3 = U0 * alpha(_safe_xi_ratio(U1, U0))   # only r1; no r2 used
+    du  = -E
+    dE  = u - eps * (u_b * U0 + U1)
+    dU0 = -1j * k * u_b * U0 - 1j * k * U1
+    dU1 = -1j * k * u_b * U1 - 1j * k * U2 + 1.0 * E
+    dU2 = -1j * k * u_b * U2 - 1j * k * U3
+    dy = np.array([du, dE, dU0, dU1, dU2])
+    return np.concatenate([dy.real, dy.imag])
+
+
+def direct_alpha_evolve(k: float, u_b: float, eps: float,
+                         t_grid: np.ndarray, y0: np.ndarray,
+                         rtol: float = 1e-8, atol: float = 1e-10) -> np.ndarray:
+    """Return E(t) with the direct alpha(U1/U0) closure — no NN, no r2."""
+    y0_real = np.concatenate([y0.real, y0.imag])
+    sol = solve_ivp(
+        _direct_alpha_rhs, (t_grid[0], t_grid[-1]), y0_real,
+        t_eval=t_grid, args=(k, u_b, eps),
+        method="RK45", rtol=rtol, atol=atol,
+    )
+    if not sol.success:
+        print(f"  direct_alpha_evolve WARNING: {sol.message}")
+    y_complex = sol.y[:5] + 1j * sol.y[5:]
+    return y_complex[1]
 
 
 # ----- BILINEAR closure (analytic, zero-parameter) ------------------------
@@ -295,6 +360,375 @@ def run_comparison(u_b: float = 5.0, eps: float = 0.05, k: float = 0.24,
                                      if not isinstance(v, (float, complex, str))})
         print(f"\n  saved {out}")
     return results
+
+
+# =============================================================================
+# N=2 system: (u, E, U_0, U_1) with closure U_2 = U_0 * beta(U_1/U_0)
+# =============================================================================
+
+def _direct_u2_rhs(t, y_real, k: float, u_b: float, eps: float):
+    """RHS for N=2 fluid system with exact per-mode beta(U_1/U_0) closure.
+
+    State y = (u, E, U_0, U_1),  stacked as real-imaginary pairs.
+    Closure: U_2 = U_0 * beta(U_1/U_0)  where beta(xi) = xi^2 - 1/Z'(xi).
+
+    Off the single-eigenmode manifold (e.g. generic delta-E IC), U_1/U_0 is
+    not equal to xi_b for any single mode; beta is evaluated at the effective
+    ratio and acts as the off-manifold extension.
+    """
+    y = y_real[:4] + 1j * y_real[4:]
+    u, E, U0, U1 = y
+    U2 = U0 * _u2_beta(_safe_xi_ratio(U1, U0))
+    du  = -E
+    dE  = u - eps * (u_b * U0 + U1)
+    dU0 = -1j * k * u_b * U0 - 1j * k * U1
+    dU1 = -1j * k * u_b * U1 - 1j * k * U2 + 1.0 * E   # M_0 = 1
+    dy = np.array([du, dE, dU0, dU1])
+    return np.concatenate([dy.real, dy.imag])
+
+
+def direct_u2_evolve(k: float, u_b: float, eps: float,
+                     t_grid: np.ndarray, y0: np.ndarray,
+                     rtol: float = 1e-8, atol: float = 1e-10) -> np.ndarray:
+    """Return E(t) for the N=2 fluid system with the exact beta closure."""
+    y0_real = np.concatenate([y0.real, y0.imag])
+    sol = solve_ivp(
+        _direct_u2_rhs, (t_grid[0], t_grid[-1]), y0_real,
+        t_eval=t_grid, args=(k, u_b, eps),
+        method="RK45", rtol=rtol, atol=atol,
+    )
+    if not sol.success:
+        print(f"  direct_u2_evolve WARNING: {sol.message}")
+    y_complex = sol.y[:4] + 1j * sol.y[4:]
+    return y_complex[1]   # E(t)
+
+
+def pade_u2_evolve(k: float, u_b: float, eps: float,
+                   t_grid: np.ndarray, y0: np.ndarray) -> np.ndarray:
+    """Return E(t) for the linear N=2 Padé-closed fluid system."""
+    a_pade2 = pade_coefficients(2)
+    return pade_evolve(k, u_b, eps, a_pade2, t_grid, y0)
+
+
+def _nn_u2_rhs(t, y_real, k: float, u_b: float, eps: float, model):
+    """RHS for N=2 fluid system with NN beta(U_1/U_0) closure."""
+    y = y_real[:4] + 1j * y_real[4:]
+    u, E, U0, U1 = y
+    r1 = _safe_xi_ratio(U1, U0)
+    U2 = U0 * complex(_u2_model_beta(model, r1))
+    du  = -E
+    dE  = u - eps * (u_b * U0 + U1)
+    dU0 = -1j * k * u_b * U0 - 1j * k * U1
+    dU1 = -1j * k * u_b * U1 - 1j * k * U2 + 1.0 * E
+    dy = np.array([du, dE, dU0, dU1])
+    return np.concatenate([dy.real, dy.imag])
+
+
+def nn_u2_evolve(k: float, u_b: float, eps: float, model: MLP_u2,
+                 t_grid: np.ndarray, y0: np.ndarray,
+                 rtol: float = 1e-8, atol: float = 1e-10) -> np.ndarray:
+    """Return E(t) for the N=2 fluid system with the NN beta closure."""
+    y0_real = np.concatenate([y0.real, y0.imag])
+    sol = solve_ivp(
+        _nn_u2_rhs, (t_grid[0], t_grid[-1]), y0_real,
+        t_eval=t_grid, args=(k, u_b, eps, model),
+        method="RK45", rtol=rtol, atol=atol,
+    )
+    if not sol.success:
+        print(f"  nn_u2_evolve WARNING: {sol.message}")
+    y_complex = sol.y[:4] + 1j * sol.y[4:]
+    return y_complex[1]
+
+
+def kinetic_ic_to_fluid_u2(y0_kinetic: np.ndarray, k: float, u_b: float,
+                            N_v: int = 96, V: float = 6.0) -> np.ndarray:
+    """Project a kinetic state onto the N=2 fluid 4-d state (u, E, U_0, U_1)."""
+    s, ds = s_grid(N_v, V)
+    F = y0_kinetic[2:]
+    U0 = ds * np.sum(F)
+    U1 = ds * np.sum(s * F)
+    return np.array([y0_kinetic[0], y0_kinetic[1], U0, U1], dtype=complex)
+
+
+def kinetic_eigenmode_ic(k: float, u_b: float, eps: float,
+                          omega_target: complex, amp: float = 1e-3,
+                          N_v: int = 96, V: float = 6.0) -> np.ndarray:
+    """Kinetic eigenvector closest to omega_target, normalised so |E| = amp.
+
+    omega_target is a complex frequency (e.g. from kinetic_dispersion root).
+    The kinetic matrix eigenvalue is lambda = -i*omega, so we search over
+    omega = i*lambda for the closest match.
+    """
+    A = kinetic_system_sspace(k, u_b, eps, N_v, V)
+    eigvals_lam, evecs = np.linalg.eig(A)
+    omegas = 1j * eigvals_lam
+    j = int(np.argmin(np.abs(omegas - omega_target)))
+    v = evecs[:, j]
+    y0 = v * (amp / abs(v[1]))
+    return y0
+
+
+def fluid_eigenmode_ic_u2(k: float, u_b: float, omega: complex,
+                           amp: float = 1e-3) -> np.ndarray:
+    """Analytical N=2 fluid eigenmode IC at kinetic eigenfrequency omega.
+
+    Derived from the moment recurrence on a single eigenmode at xi_b:
+        U1/U0 = xi_b                    (from the dU0/dt equation)
+        U2    = U0 * beta(xi_b)         (direct-beta closure, exact on eigenmode)
+        U0    = amp * i * Z'(xi_b) / k  (from the dU1/dt equation)
+        u     = amp / (i*omega)
+
+    This is the exact eigenmode of the direct-beta fluid system and is also
+    a very accurate IC for the NN closure (to the extent the NN approximates
+    beta accurately at xi_b).  The Pade closure does NOT support this eigenmode
+    structure, so Pade will immediately project onto its own (spuriously growing)
+    eigenmodes when started from this IC.
+
+    Returns: complex array [u, E, U0, U1].
+    """
+    from bot.closures.u2 import Zprime
+    xi_b = (omega - k * u_b) / k
+    Zp = Zprime(xi_b)
+    E0 = float(amp)
+    u0 = E0 / (1j * omega)
+    U0 = 1j * Zp * E0 / k
+    U1 = 1j * xi_b * Zp * E0 / k
+    return np.array([u0, E0, U0, U1], dtype=complex)
+
+
+def fluid_eigenmode_ic_u3(k: float, u_b: float, omega: complex,
+                           amp: float = 1e-3) -> np.ndarray:
+    """Analytical N=3 fluid eigenmode IC at kinetic eigenfrequency omega.
+
+    Extends fluid_eigenmode_ic_u2 by appending U2 = beta(xi_b) * U0:
+        U2 = amp * i * beta(xi_b) * Z'(xi_b) / k
+
+    This is the exact eigenmode structure for both the direct-alpha and
+    bilinear N=3 closures (which are exact on eigenmode via alpha = xi * beta).
+    It is also a good IC for the N=3 NN closure to the extent the NN
+    approximates alpha accurately at xi_b.
+
+    Returns: complex array [u, E, U0, U1, U2].
+    """
+    from bot.closures.u2 import Zprime, beta as _beta
+    xi_b = (omega - k * u_b) / k
+    Zp = Zprime(xi_b)
+    beta_val = _beta(xi_b)
+    E0 = float(amp)
+    u0 = E0 / (1j * omega)
+    U0 = 1j * Zp * E0 / k
+    U1 = 1j * xi_b * Zp * E0 / k
+    U2 = 1j * beta_val * Zp * E0 / k   # = beta_val * U0
+    return np.array([u0, E0, U0, U1, U2], dtype=complex)
+
+
+def kinetic_ic_from_fluid_moments(
+        k: float, u_b: float, omega: complex,
+        amp: float = 1e-3,
+        N_v: int = 96, V: float = 6.0) -> np.ndarray:
+    """Kinetic IC constructed from the N=2 fluid eigenmode moments.
+
+    Projects the fluid eigenmode onto a smooth beam-frame velocity distribution:
+
+        delta_F(s) = U0 * G(s) + U1 * s * G(s)
+
+    where G(s) = exp(-s^2/2)/sqrt(2*pi) is the normalised beam Maxwellian and
+    s = v - u_b is the beam-frame velocity.  This satisfies
+
+        int delta_F(s) ds  = U0
+        int s * delta_F(s) ds = U1
+
+    exactly by Gaussian moment identities (int G ds = 1, int s G ds = 0,
+    int s^2 G ds = 1).
+
+    Advantages over kinetic_eigenmode_ic for Landau-damped cases:
+      - Does not rely on finding a discrete eigenvalue (Landau poles are not
+        discrete eigenvalues of the finite velocity-grid kinetic matrix).
+      - Smooth in velocity space: suppresses van Kampen quasi-continuum modes
+        relative to the target beam mode.
+      - Moments (u, E, U0, U1) are exactly those of the fluid eigenmode, so
+        the kinetic IC is consistent with the fluid IC used for direct-beta/NN.
+
+    Returns: complex array of length 2 + N_v  (u, E, F[s_0], ..., F[s_{N_v-1}]).
+    """
+    from bot.closures.u2 import Zprime
+    s, _ds = s_grid(N_v, V)
+
+    xi_b = (omega - k * u_b) / k
+    Zp   = Zprime(xi_b)
+    E0   = float(amp)
+    u0   = E0 / (1j * omega)
+    U0   = 1j * Zp * E0 / k
+    U1   = 1j * xi_b * Zp * E0 / k
+
+    G       = np.exp(-0.5 * s**2) / np.sqrt(2.0 * np.pi)
+    dF      = U0 * G + U1 * s * G          # delta_F on velocity grid
+
+    y0 = np.zeros(2 + N_v, dtype=complex)
+    y0[0]  = u0
+    y0[1]  = E0
+    y0[2:] = dF
+    return y0
+
+
+def kinetic_landau_ic(
+        k: float, u_b: float, omega: complex,
+        amp: float = 1e-3,
+        N_v: int = 96, V: float = 6.0) -> np.ndarray:
+    """Exact Landau-mode IC for the finite velocity-grid kinetic system.
+
+    Derived from the linearized beam Vlasov equation in the kinetic matrix:
+
+        d(delta_F)/dt = -ik(u_b+s) delta_F  +  E * src(s)
+
+    For a single eigenmode e^{-i omega t} the exact solution is:
+
+        delta_F(s) = -i E_0 * src(s) / (k * (s - xi_b))
+
+    where  src(s) = (2s/sqrt(pi)) * exp(-s^2)  (from the code),
+    xi_b = (omega - k*u_b)/k  is complex with Im(xi_b) < 0 for damped modes.
+
+    Since Im(xi_b) != 0, the denominator (s - xi_b) never vanishes on the
+    real s-axis, so delta_F(s) is a smooth complex function — no van Kampen
+    quasi-continuum contamination in the continuous limit.
+
+    The moments of this IC satisfy exactly:
+        U0 = i * Z'(xi_b) * E0 / k    (matches fluid_eigenmode_ic_u2)
+        U1 = i * xi_b * Z'(xi_b) * E0 / k
+
+    This is the correct IC to see Landau damping in the kinetic simulation.
+    kinetic_eigenmode_ic (argmin strategy) always picks a van Kampen mode
+    instead because the Landau pole is not a discrete eigenvalue of the
+    finite-grid kinetic matrix.
+
+    Returns: complex array of length 2 + N_v  (u, E, F[s_0], ..., F[s_{N_v-1}]).
+    """
+    s, _ds = s_grid(N_v, V)
+
+    xi_b = (omega - k * u_b) / k
+    E0   = float(amp)
+    u0   = E0 / (1j * omega)
+
+    src  = (2.0 * s / np.sqrt(np.pi)) * np.exp(-s**2)   # same as in kinetic matrix
+    dF   = -1j * E0 * src / (k * (s - xi_b))
+
+    y0 = np.zeros(2 + N_v, dtype=complex)
+    y0[0]  = u0
+    y0[1]  = E0
+    y0[2:] = dF
+    return y0
+
+
+# =============================================================================
+# N=4 system: (u, E, U_0, U_1, U_2, U_3) with closure U_4 = U_0 * alpha4(...)
+# =============================================================================
+
+def fluid_eigenmode_ic_n4(k: float, u_b: float, omega: complex,
+                           amp: float = 1e-3) -> np.ndarray:
+    """Analytical N=4 fluid eigenmode IC at kinetic eigenfrequency omega.
+
+    Extends fluid_eigenmode_ic_u3 by appending U3 = alpha(xi_b) * U0:
+        U3 = amp * i * alpha(xi_b) * Z'(xi_b) / k
+
+    Returns: complex array [u, E, U0, U1, U2, U3].
+    """
+    from bot.closures.u2 import Zprime, beta as _beta
+    from bot.closures.inference import alpha as _alpha
+    xi_b = (omega - k * u_b) / k
+    Zp = Zprime(xi_b)
+    beta_val  = _beta(xi_b)
+    alpha_val = _alpha(xi_b)
+    E0 = float(amp)
+    u0 = E0 / (1j * omega)
+    U0 = 1j * Zp * E0 / k
+    U1 = 1j * xi_b * Zp * E0 / k
+    U2 = 1j * beta_val * Zp * E0 / k
+    U3 = 1j * alpha_val * Zp * E0 / k
+    return np.array([u0, E0, U0, U1, U2, U3], dtype=complex)
+
+
+def _direct_n4_rhs(t, y_real, k: float, u_b: float, eps: float):
+    """RHS for N=4 fluid system with direct alpha4(U1/U0) closure.
+
+    Extends the N=3 system by one beam moment: state is
+        y = (u, E, U_0, U_1, U_2, U_3).
+    Closure: U_4 = U_0 * alpha4(U_1/U_0)  (uses only r_1, Jensen error off-manifold).
+    New dU_3 equation picks up an E source from M_2 = 1/2:
+        dU_3/dt = -ik u_b U_3 - ik U_4 + 3*M_2 * E  =  ... + (3/2) E
+    """
+    from bot.closures.inference import alpha4 as _alpha4
+    y = y_real[:6] + 1j * y_real[6:]
+    u, E, U0, U1, U2, U3 = y
+    if abs(U0) < 1e-15:
+        U4 = 0.0 + 0.0j
+    else:
+        U4 = U0 * _alpha4(U1 / U0)
+    du  = -E
+    dE  = u - eps * (u_b * U0 + U1)
+    dU0 = -1j * k * u_b * U0 - 1j * k * U1
+    dU1 = -1j * k * u_b * U1 - 1j * k * U2 + 1.0 * E   # M_0 = 1
+    dU2 = -1j * k * u_b * U2 - 1j * k * U3              # M_1 = 0
+    dU3 = -1j * k * u_b * U3 - 1j * k * U4 + 1.5 * E   # 3*M_2 = 3*0.5 = 1.5
+    dy  = np.array([du, dE, dU0, dU1, dU2, dU3])
+    return np.concatenate([dy.real, dy.imag])
+
+
+def direct_n4_evolve(k: float, u_b: float, eps: float,
+                     t_grid: np.ndarray, y0: np.ndarray,
+                     rtol: float = 1e-8, atol: float = 1e-10) -> np.ndarray:
+    """Return E(t) for the N=4 fluid system with the direct alpha4(U1/U0) closure."""
+    y0_real = np.concatenate([y0.real, y0.imag])
+    sol = solve_ivp(
+        _direct_n4_rhs, (t_grid[0], t_grid[-1]), y0_real,
+        t_eval=t_grid, args=(k, u_b, eps),
+        method="RK45", rtol=rtol, atol=atol,
+    )
+    if not sol.success:
+        print(f"  direct_n4_evolve WARNING: {sol.message}")
+    y_complex = sol.y[:6] + 1j * sol.y[6:]
+    return y_complex[1]   # E(t)
+
+
+def _nn_n4_rhs(t, y_real, k: float, u_b: float, eps: float, model):
+    """RHS for N=4 fluid system with NN alpha4(r1, r2, r3) closure."""
+    from bot.closures.n4_nn import n4_predict_alpha4
+    y = y_real[:6] + 1j * y_real[6:]
+    u, E, U0, U1, U2, U3 = y
+    r1 = _safe_xi_ratio(U1, U0)
+    r2 = _safe_xi_ratio(U2, U0)
+    r3 = _safe_xi_ratio(U3, U0)
+    U4 = U0 * complex(n4_predict_alpha4(model, r1, r2, r3))
+    du  = -E
+    dE  = u - eps * (u_b * U0 + U1)
+    dU0 = -1j * k * u_b * U0 - 1j * k * U1
+    dU1 = -1j * k * u_b * U1 - 1j * k * U2 + 1.0 * E
+    dU2 = -1j * k * u_b * U2 - 1j * k * U3
+    dU3 = -1j * k * u_b * U3 - 1j * k * U4 + 1.5 * E
+    dy  = np.array([du, dE, dU0, dU1, dU2, dU3])
+    return np.concatenate([dy.real, dy.imag])
+
+
+def nn_n4_evolve(k: float, u_b: float, eps: float, model,
+                 t_grid: np.ndarray, y0: np.ndarray,
+                 rtol: float = 1e-8, atol: float = 1e-10) -> np.ndarray:
+    """Return E(t) for the N=4 fluid system with the NN alpha4 closure."""
+    y0_real = np.concatenate([y0.real, y0.imag])
+    sol = solve_ivp(
+        _nn_n4_rhs, (t_grid[0], t_grid[-1]), y0_real,
+        t_eval=t_grid, args=(k, u_b, eps, model),
+        method="RK45", rtol=rtol, atol=atol,
+    )
+    if not sol.success:
+        print(f"  nn_n4_evolve WARNING: {sol.message}")
+    y_complex = sol.y[:6] + 1j * sol.y[6:]
+    return y_complex[1]
+
+
+def pade_n4_evolve(k: float, u_b: float, eps: float,
+                   t_grid: np.ndarray, y0: np.ndarray) -> np.ndarray:
+    """Return E(t) for the linear N=4 Padé-closed fluid system."""
+    a_pade4 = pade_coefficients(4)
+    return pade_evolve(k, u_b, eps, a_pade4, t_grid, y0)
 
 
 if __name__ == "__main__":

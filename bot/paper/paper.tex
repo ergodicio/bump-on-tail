@@ -16,8 +16,9 @@
 \newcommand{\ub}{u_b}
 \newcommand{\vb}{v_b}
 
-\title{Frequency-domain training data for a learned plasma fluid closure}
-\author{Archis Joglekar}
+\title{Frequency-domain training data for a learned plasma fluid closure\\
+\large with extensions to $N=2$, $N=4$, and superposition training}
+\author{Archis Joglekar \and E.~J.~Paul}
 \date{\today}
 
 \begin{document}
@@ -43,6 +44,16 @@ choices) and is problem-agnostic in $(\ub/\vb, \varepsilon, k)$. The
 geometric reason the win exists: linear eigenmodes from a kinetic
 simulation trace a narrow region in the $\xib$-plane, leaving the rest of
 the relevant rectangle uncovered.
+We also analyze the Jensen error---the systematic off-manifold error that
+arises when the fluid state is a superposition of eigenmodes---and show that
+it is \emph{irreducible at $N=3$} (four real input degrees of freedom for six
+real unknowns describing a two-mode state) but \emph{trainable at $N=4$}
+(six for six).  An $N=4$ NN trained on a three-component dataset (single
+eigenmodes, complex-weight two-mode superpositions, and explicit chord
+samples) reduces the growing-mode Jensen chord error $15\times$ (from $5.8\%$
+to $0.4\%$).  Residual error on Landau-damped pairs reflects a genuine
+kinetic limitation: rapid Landau decay requires van~Kampen phase mixing and
+cannot be recovered by any finite-moment fluid closure.
 \end{abstract}
 
 % =====================================================================
@@ -80,41 +91,68 @@ The kinetic dispersion at scales much longer than the Debye length is
 \paragraph{Padé closures.} A linear-in-moments closure $U_3 = \sum_{i<3}
 a_i U_i$ with constants $a_i$ combined with the moment recurrence yields a
 degree-$(1,3)$ rational approximant of $Z'(\xib)$. Choosing $(a_i)$ to
-match the Taylor series of $-\sqrt{\pi} Z'$ at $\xib=0$ to order $\xib^N$
-is the Pad\'e closure $R_N$ in the Hammett--Perkins / Hunana hierarchy.
+match the Taylor series of $Z'$ at $\xib=0$ to order $\xib^N$ is the
+Pad\'e closure $R_N$ in the Hammett--Perkins / Hunana hierarchy; the $N=3$
+case used throughout this paper is constructed directly from the HP~1990
+recommended 3-moment response function ($\Gamma=3$, $\mu_1=0$,
+$\chi_1=2/\sqrt{\pi}$) rather than a bare Taylor match at $\xib=0$, which
+removes a spurious unstable fluid eigenmode present in the naive
+Taylor-matched $R_3$ (Section~\ref{sec:itg} gives an independent check of
+this $N=3$ closure against the HP~1990 ITG dispersion relation).
 
 % =====================================================================
 \section{Padé baseline}
+\label{sec:pade-baseline}
 
 Figure~\ref{fig:response} compares the closed fluid response of the Pad\'e
-hierarchy $N \in \{3,4,5,6\}$ to the kinetic $-\sqrt{\pi}\,Z'(\xib)$ along
-real $\xib$. Each Pad\'e closure matches the kinetic curve to
-$\sim 10^{-2N+3}$ at $\xib=0$ (Taylor matching) and degrades rapidly to
-residual of order unity for $|\xib| \gtrsim 1$. The imaginary part (Landau
-resonance) is captured at only $\sim 30\%$ of its kinetic amplitude even
-at $N=6$. This is the fundamental Pad\'e ceiling: a finite-order rational
-approximates an entire function only locally.
+hierarchy $N \in \{3,4,5,6\}$ to the kinetic $Z'(\xib)$ along real $\xib$.
+The $N=3$ member of the hierarchy is built from the HP~1990 recommended
+3-moment response ($\Gamma=3$, $\mu_1=0$, $\chi_1=2/\sqrt{\pi}$) rather
+than a bare Taylor match: it is exact at $\xib=0$ by construction
+($\chi_1$ fixes $Z(0)=i\sqrt{\pi}$) but its residual grows to
+$6.9\times10^{-1}$ (a relative error of $55\%$) by $|\xib|\sim1$, where
+the Landau resonance peaks. $N\geq4$ instead Taylor-match $Z'$ directly at
+$\xib=0$ and converge quickly with order: the residual at $|\xib|\lesssim1$
+drops from $3.6\times10^{-2}$ ($N=4$) to $8.5\times10^{-3}$ ($N=5$) to
+$2.0\times10^{-3}$ ($N=6$), each $\sim4\times$ tighter than the last. The
+$N=3$ residual visible in the figure is specific to the HP construction
+(chosen for its large-$|\xib|$/stability properties, not pointwise
+accuracy); a bare Taylor-matched $R_3$ would have comparable accuracy to
+$R_4$ here but reintroduces a spurious unstable fluid eigenmode that the
+HP construction was designed to remove (Section~\ref{sec:itg}).
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{fig_response_function}
-  \caption{Padé hierarchy vs kinetic $-\sqrt{\pi}\,Z'(\xib)$ along real
-  $\xib$. Real part (left), imaginary part / Landau resonance (middle),
-  pointwise residual on log scale (right). Pad\'e residuals plateau at
-  $\sim 10^0$ for $|\xib|>1$.}
+  \caption{Padé hierarchy vs kinetic $Z'(\xib)$ along real $\xib$. Real
+  part (left), imaginary part / Landau resonance (middle), pointwise
+  residual on log scale (right). $N=3$ (HP-constructed) plateaus at
+  $\sim10^{-1}$ near $|\xib|\sim1$; $N\geq4$ (Taylor-matched) converge to
+  $10^{-3}$--$10^{-2}$ by $N=6$.}
   \label{fig:response}
 \end{figure}
 
 Figure~\ref{fig:overshootN} plots the relative error in the BoT
 $\gamma_{\max}$ at the canonical operating point
-$(\ub/\vb=5, \varepsilon=0.05)$ vs Pad\'e order. The hierarchy oscillates
-around the kinetic answer, crossing zero between $N=7$ and $N=8$.
+$(\ub/\vb=5, \varepsilon=0.05)$ vs Pad\'e order. $N=3$ overshoots by
+$+5.0\%$; $N\geq4$ collapses the overshoot to $\leq0.04\%$ and decreases
+monotonically to $+0.001\%$ by $N=7$ --- no oscillation or sign change.
+Despite this, $N=3$ remains the operating point for the rest of the
+paper: it is the smallest closure with a nontrivial (bilinear) per-mode
+identity (Section~\ref{sec:bilinear}), matches the moment count of the
+$N=2$/$N=4$ comparisons in Sections~\ref{sec:n2} and~\ref{sec:n4}, and is
+the regime where the NN closure's advantage over Pad\'e is largest in
+relative terms; the dispersion-level accuracy of higher-$N$ Pad\'e does
+not by itself fix the off-manifold (Jensen) error analyzed in
+Section~\ref{sec:interp}, which is a property of the closure's
+\emph{functional form}, not its order.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.6\linewidth]{fig_overshoot_vs_N}
   \caption{$\gamma_{\max}$ overshoot at $(\ub/\vb, \varepsilon)=(5, 0.05)$
-  vs Pad\'e order. Non-monotone --- crosses zero near $N=7$.}
+  vs Pad\'e order. $N=3$ (HP-constructed): $+5.0\%$. $N\geq4$
+  (Taylor-matched): $\leq0.04\%$, monotonically decreasing.}
   \label{fig:overshootN}
 \end{figure}
 
@@ -149,7 +187,7 @@ multiplication.
 \paragraph{Used as a closure, this fails.} On a superposition
 $U_n(t) = \sum_i A_i e^{-i\omega_i t} U_n^{(i)}$ the identity breaks:
 the product of sums in $r_1 \cdot r_2$ generates cross-terms ($i\neq j$)
-that the per-mode formula $\sum_i A_i \xib_i U_2^{(i)}$ does not. So
+that the per-mode formula $\sum_i A_i \xi_{b,i} U_2^{(i)}$ does not. So
 hardcoding $U_3 = U_1 U_2 / U_0$ in a fluid solver is not a usable
 closure. At the canonical $(5,\,0.05,\,k=0.24)$ point, with a
 Langmuir-projected IC (single eigenmode), bilinear matches the kinetic
@@ -556,6 +594,266 @@ off-manifold structure; bilinear gets the on-manifold structure but
 fails on the off-manifold extension; the NN gets both.
 
 % =====================================================================
+\section{Extension to the \texorpdfstring{$N=2$}{N=2} even-moment closure}
+\label{sec:n2}
+
+The analysis in Sections \ref{sec:results}--\ref{sec:interp} focused
+on the $N=3$ closure: predicting $U_3$ from $(U_0,U_1,U_2)$.  We now
+examine the $N=2$ level, where the closure target is $U_2$ from
+$(U_0,U_1)$.
+
+\paragraph{System and exact per-mode formula.}
+Truncating at two beam moments gives the four-dimensional state
+$y=(u,E,U_0,U_1)$ per Fourier mode $k$, with
+$\partial_t U_1 = -ik\ub U_1 - ik U_2 + M_0 E$ and $M_0=1$.
+On a single eigenmode the $n=0$ recurrence gives $U_1=\xib U_0$
+(zero-RHS since $M_{-1}=0$), so $r_1\equiv U_1/U_0=\xib$
+\emph{exactly}.  The $n=1$ step has nonzero source $M_0\Phih$ and
+produces
+\begin{equation}\label{eq:beta}
+  \beta(\xib) \equiv \frac{U_2}{U_0}
+               = \xib^2 - \frac{1}{Z'(\xib)}.
+\end{equation}
+Because $r_1=\xib$ the inference map is trivial, and the
+\emph{direct-$\beta$} closure $U_2=U_0\,\beta(U_1/U_0)$ is
+simultaneously the exact on-mode formula and the natural off-manifold
+extension.
+
+\paragraph{Structural contrast with $N=3$.}
+At $N=3$ the $n=2$ recurrence has zero RHS ($M_1=0$), giving
+$U_3=r_1 r_2 U_0$: the bilinear identity $\alpha=r_1r_2$
+(Section~\ref{sec:bilinear}).  That identity is exact on eigenmode but
+produces $O(1)$ cross-term errors off it, motivating the NN.  At
+$N=2$ no bilinear identity exists ($M_0\neq0$), but the inference map
+is trivial and the exact $\beta$ is already off-manifold-smooth: as
+the Langmuir mode grows to dominate, $r_1\to\xib^{\rm kin}$ and
+$\beta(r_1)\to\beta(\xib^{\rm kin})$ exactly.
+Table~\ref{tab:structure} summarises the contrast.
+
+\begin{table}[H]
+\centering
+\caption{Structural comparison of $N=2$ and $N=3$ Maxwellian-beam closures.}
+\label{tab:structure}
+\begin{tabular}{lll}
+\toprule
+ & $N=3$ ($U_3$, odd) & $N=2$ ($U_2$, even) \\
+\midrule
+Exact per-mode formula & $\alpha = \xib^3 - \xib/Z'(\xib)$ &
+  $\beta = \xib^2 - 1/Z'(\xib)$ \\
+Zero-parameter identity & $\alpha = r_1 r_2$ (bilinear) & none \\
+NN input dimension & 4 reals & 2 reals \\
+Inference ($r\to\xib$) & non-trivial & trivial: $r_1=\xib$ \\
+Off-manifold & cross-terms $O(1)$; NN needed &
+  smooth; exact formula sufficient \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Pad\'{e} $N=2$.}
+A linear closure $U_2=a_0U_0+a_1U_1$ Taylor-matched at
+$\xib\to\infty$ gives $\beta_{\rm Pad\acute{e}}(\xib)=a_0+a_1\xib$
+with $a_0=-0.282$, $a_1=0.500i$---a poor approximation to the
+nonlinear exact $\beta$ (Figure~\ref{fig:u2response}).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_u2_response}
+  \caption{Left: kinetic response $-Z'(\xib)$ (solid) vs.\ Pad\'{e}
+  rational (dashed) along real $\xib$.  Right: exact $\beta(\xib)$
+  (Re solid / Im dotted) vs.\ Pad\'{e}-implied linear $\beta$
+  (Re dashed / Im dash-dot).  The linear $\beta$ does not approximate
+  the nonlinear exact $\beta$ for $|\xib|>0.5$.}
+  \label{fig:u2response}
+\end{figure}
+
+\paragraph{Dispersion.}
+Table~\ref{tab:disp_u2} gives $\gamma_{\max}$ overshoot at four
+operating points.  Direct-$\beta$ recovers the kinetic rate to
+numerical precision everywhere; Pad\'{e} $N=2$ overshoots by $+57\%$
+at the canonical point and $+177\%$ near the marginal corner.
+
+\begin{table}[H]
+\centering
+\caption{$\gamma_{\max}$ relative overshoot vs.\ kinetic, $N=2$ closures.}
+\label{tab:disp_u2}
+\begin{tabular}{ccrrr}
+\toprule
+$\ub/\vb$ & $\varepsilon$ & $\gamma_{\rm kin}$ &
+  Pad\'{e} $N=2$ & Direct $\beta$ \\
+\midrule
+5.0 & 0.05 & $+0.17028$ & $+57\%$ & $0.00\%$ \\
+5.0 & 0.20 & $+0.28919$ & $+28\%$ & $0.00\%$ \\
+8.0 & 0.05 & $+0.19991$ & $+23\%$ & $0.00\%$ \\
+3.0 & 0.05 & $+0.11254$ & $+177\%$ & $0.00\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Time-domain and off-manifold performance.}
+Figure~\ref{fig:u2td} shows that direct-$\beta$ tracks the kinetic
+reference to within numerical precision under both a
+Langmuir-projected and a generic $\delta E$ IC, while Pad\'{e} $N=2$
+diverges immediately owing to its $+55\%$ growth-rate error.
+The off-manifold diagnostic (Figure~\ref{fig:u2offmfld}) shows that
+Pad\'{e} $N=2$ plateaus at $\sim\!100$--$200\%$ closure error for
+all time; direct-$\beta$ has a $\sim\!10\%$ transient during the
+multi-mode phase ($t\lesssim10$) and then decays to $<\!10^{-5}$
+as the Langmuir mode dominates and $r_1\to\xib^{\rm kin}$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_u2_time_domain}
+  \caption{$|E(t)|$ at the canonical point $(\ub/\vb,\varepsilon,k)=
+  (5,0.05,0.24)$ for kinetic (black), Pad\'{e} $N=2$ (blue dashed),
+  and direct-$\beta$ (orange) under a Langmuir-projected IC (left) and
+  a generic $\delta E$ IC (right).  Fitted growth rates: kinetic
+  $+0.170$, Pad\'{e} $+0.265$, direct-$\beta$ $+0.170$.}
+  \label{fig:u2td}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\linewidth]{fig_u2_offmanifold}
+  \caption{Top: $|E(t)|$ along the kinetic trajectory (generic $\delta E$
+  IC).  Bottom: closure error
+  $|\beta_{\rm cl}-\beta_{\rm kin}|/|\beta_{\rm kin}|$
+  evaluated at the kinetic moments.  Pad\'{e} $N=2$ (blue solid)
+  plateaus at $\sim\!100$--$200\%$.  Direct-$\beta$ (orange dashed)
+  peaks at $\sim\!10\%$ during the multi-mode transient and decays to
+  $<\!10^{-5}$ once the Langmuir mode dominates.}
+  \label{fig:u2offmfld}
+\end{figure}
+
+\paragraph{Parameter sweep.}
+Over the same $(\ub/\vb,\varepsilon)$ grid as Section~\ref{sec:results}
+(Figure~\ref{fig:u2sweep}), direct-$\beta$ stays within $\pm0.5\%$
+everywhere; Pad\'{e} $N=2$ overshoot ranges from $+9\%$ (hot dense
+beam) to $+800\%$ (cold sparse beam).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_u2_sweep}
+  \caption{$\gamma_{\rm eff}$ relative error vs.\ kinetic on the
+  $(\ub/\vb,\varepsilon)$ grid.  Left: Pad\'{e} $N=2$, uniformly in
+  $10^0$--$10^1$.  Right: direct-$\beta$, $\lesssim\!10^{-3}$ for
+  $\varepsilon\geq0.05$; the residual at the small-$\varepsilon$ edge
+  is fitting noise, not closure error.}
+  \label{fig:u2sweep}
+\end{figure}
+
+\subsection{Off-manifold transient: why direct-$\beta$ tolerates any IC and bilinear does not}
+\label{sec:manifold-transient}
+
+Section~\ref{sec:bilinear} showed that the bilinear identity
+$U_3=U_1U_2/U_0$ \eqref{eq:bilinear}, hardcoded as a closure, matches
+kinetic to six decimals on a Langmuir-projected IC but overshoots
+$\gamma_{\rm eff}$ by $+28.4\%$ under a generic $\delta E$ IC at the
+canonical point. We now isolate \emph{why}, using the $N=2$/$N=3$
+state-space contrast of this section: direct-$\beta$ never integrates
+$U_2$ as a dynamical variable --- it is defined algebraically,
+$U_2\equiv U_0\,\beta(U_1/U_0)$, at every evaluation of the right-hand
+side --- whereas bilinear N=3 integrates $U_2$ freely and closes only
+$U_3=U_1U_2/U_0$ one level up. Define the off-manifold distance
+\begin{equation}\label{eq:offmfld-dist}
+  d(t) \;\equiv\; \bigl|\,U_2(t) - U_0(t)\,\beta\bigl(U_1(t)/U_0(t)\bigr)\,\bigr|.
+\end{equation}
+For direct-$\beta$, $d\equiv0$ identically and at every integrator
+tolerance, down to machine precision at $\mathrm{rtol}=10^{-4}$ --- not
+because $\beta$ happens to be accurate, but because the two terms being
+subtracted are the same algebraic expression by construction. For
+bilinear, $d(t)$ is a genuine measure of trajectory error: $U_2$ can,
+and does, drift away from the $\beta$-manifold value, and how far it
+drifts depends entirely on how close the IC starts to a true kinetic
+eigenmode.
+
+Figure~\ref{fig:manifold-transient} compares three IC constructions at
+$(\ub/\vb,\varepsilon)=(4.0,0.02)$, $\gamma_{\rm kin}=0.0893$: (1) a
+generic $\delta E$ IC ($U_n(0)=0$, maximally off-manifold); (2) the
+literal velocity moments of the true kinetic eigenvector, mixed
+$50/50$ with the kinetic eigenvector of a second, Landau-damped mode
+at the same $k$ (``projected kinetic, off-eigenmode''); and (3) the
+closed-form single-eigenmode formulas $U_1/U_0=\xib$,
+$U_2/U_0=\beta(\xib)$, mixed $50/50$ between the same growing and
+damped frequencies (``analytic eigenmode, off-eigenmode''). Row (3) is
+exactly on the single-mode manifold for \emph{either} frequency alone;
+mixing two different complex frequencies makes $\hat\xi\equiv U_1/U_0$
+time-varying rather than constant; once $\hat\xi(t)$ is no longer
+$\xib$ for any single kinetic mode, both rows (2) and (3) are
+off-manifold for a genuine physical reason (mode beating), not merely
+finite-moment truncation.
+
+\begin{table}[H]
+\centering
+\caption{Bilinear N=3 late-time growth-rate overshoot vs.\ $\gamma_{\rm
+kin}=0.0893$, by IC construction. Direct-$\beta$ is exact (0.00\%,
+$d\equiv0$) in every row.}
+\label{tab:manifold-transient}
+\begin{tabular}{lr}
+\toprule
+IC construction & Bilinear $N{=}3$ overshoot \\
+\midrule
+Generic $\delta E$ (Row 1) & $+80\%$ \\
+Projected kinetic, off-eigenmode mix (Row 2) & $-4\%$ \\
+Analytic eigenmode, off-eigenmode mix (Row 3) & $+245\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_manifold_transient}
+  \caption{Kinetic vs.\ bilinear $N{=}3$ vs.\ direct-$\beta$ $N{=}2$ at
+  $(\ub/\vb,\varepsilon)=(4.0,0.02)$ under the three IC constructions of
+  Table~\ref{tab:manifold-transient} (rows). Columns: (A) $|E(t)|$; (B)
+  off-manifold distance $d(t)$ \eqref{eq:offmfld-dist}; (C)
+  instantaneous growth rate $d\log|E|/dt$. Direct-$\beta$ (blue) sits at
+  $d\equiv0$ and tracks $\gamma_{\rm kin}$ from $t=0$ in every row;
+  bilinear (orange) drifts off-manifold at a rate and to a degree set by
+  how far the IC starts from a true single-mode eigenvector.}
+  \label{fig:manifold-transient}
+\end{figure}
+
+The key result is that bilinear's transient is not bounded by how
+``close'' an IC looks to an eigenmode in amplitude --- it is bounded by
+how much amplitude sits in the modes of the \emph{bilinear fluid
+system itself} that are not $\gamma_{\rm kin}$. Once excited, even at
+a vanishingly small initial amplitude, that spurious mode eventually
+dominates: in Row 1, $d(t)$ grows at a local rate that falls from
+$\sim\!1.7$ (the system bootstrapping from $U_n(0)=0$) down to a
+constant $0.161$ by $t\gtrsim20$ --- bilinear's own dominant unstable
+eigenvalue, not $\gamma_{\rm kin}=0.0893$, which is exactly the source
+of the $+80\%$ overshoot. In Row 2, the projected-kinetic IC is so
+closely aligned with the physical mode that $d(t)$ grows at a
+\emph{constant} rate equal to $\gamma_{\rm kin}$ for the entire
+$t\in[0,80]$ window plotted --- the same spurious mode is present, but
+its initial amplitude is so small that the crossover to its dominance
+is pushed well past $t=80$. Row 3 shows the opposite extreme: building
+the IC from the bare 3-moment formulas, rather than projecting the
+literal (infinite-moment) kinetic eigenvector, puts enough amplitude
+into the spurious mode that bilinear locks onto a growth rate of
+$0.308$ --- $3.5\times$ faster than $\gamma_{\rm kin}$ --- well before
+$t=80$. This sharpens the point of Section~\ref{sec:bilinear}: the
+bilinear identity is exact \emph{pointwise} on any single eigenmode,
+but mixing even two exact eigenmodes is enough to expose a closure
+instability with no analogue in direct-$\beta$, where there is no
+extra state variable to mistrack in the first place.
+
+\paragraph{Numerical note.} Evaluating the off-eigenmode mixtures of
+Row 2/3 for direct-$\beta$ and the NN closures requires a numerical
+safeguard absent from the original $N{=}2$/$N{=}3$ solvers. Superposing
+two modes of different complex frequency makes $U_0(t)$ pass through a
+near-zero node from destructive interference; at that instant
+$\hat\xi=U_1/U_0$ diverges, and since $Z'(\xi)$ grows like
+$e^{\mathrm{Im}(\xi)^2}$ for $\mathrm{Im}(\xi)\to-\infty$, it overflows
+within a handful of adaptive-step evaluations, collapsing the RK45
+step size. Clipping $|\hat\xi|$ to $12$ (comfortably above any
+physically relevant $|\xib|\lesssim8$ used elsewhere in this paper,
+comfortably below where $Z'$ approaches double-precision overflow)
+before evaluating any $Z'$-based closure resolves this without
+affecting on-manifold accuracy, which we verified is unchanged to
+$2.4\times10^{-7}$ relative error on a pure eigenmode.
+
+% =====================================================================
 \section{Generalization: Landau damping on a single warm Maxwellian}
 \label{sec:landau}
 
@@ -652,6 +950,339 @@ when the equilibrium is non-Maxwellian (kappa, flat-top, trapped
 plateau) or when going beyond 3 moments (the per-mode identity at higher
 order is not just a product because $M_2 \neq 0$).
 
+\paragraph{Landau-damped BoT: Pad\'{e} structural failure.}
+We return to the full BoT configuration but move into the regime where
+the minority beam provides Landau \emph{damping} rather than
+instability.  This requires $\ub<\omega_r/k$, so that
+$\text{Im}(\xib)<0$ for the relevant mode.  Three test points are
+$(\ub,k)=(2.0,\,0.30)$, $(1.5,\,0.40)$, $(1.0,\,0.50)$ with
+$\varepsilon=0.05$.  The resulting $\xib$ values ($1.93{-}0.14i$ to
+$1.25{-}0.34i$) lie well inside the training rectangle.
+
+Figure~\ref{fig:u2ldamp} shows the growth rates from dispersion for all
+$N=2$ closures.  Pad\'{e} $N=2$ predicts spurious instability ($\gamma>0$)
+at every test point.  The reason is structural: the Taylor-series
+approximant is anchored on the real $\xib$-axis and cannot represent
+the Landau-pole contribution that lives in the lower half-plane
+($\text{Im}(\xib)<0$).  The direct-$\beta$ and NN$(r_1)$ closures both
+correctly predict negative $\gamma$ because they evaluate the Faddeeva
+function at the actual complex $\xib$.  This failure is not a matter of
+closure accuracy---it is a fundamental limitation of any polynomial or
+rational approximation matched by Taylor expansion on the real axis.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_u2_landau_damping}
+  \caption{Analytic growth rates $\gamma=\text{Im}(\omega)$ at three
+  Landau-damped BoT test points (negative = damped).  Pad\'{e} $N=2$
+  (blue) predicts positive $\gamma$ at every point, a qualitative failure.
+  Direct-$\beta$ (orange) and NN$(r_1)$ (green) correctly predict
+  negative $\gamma$.  Right panel: $\xib$ locations in the complex plane;
+  all points lie within the training rectangle.}
+  \label{fig:u2ldamp}
+\end{figure}
+
+\paragraph{Comparing $N=2$ and $N=3$ closures off eigenmode.}
+To compare closures across both truncation levels under multi-mode
+conditions, we integrate from a generic $\delta E$ IC at each
+Landau-damped test point and compare to the kinetic ground truth.
+To first establish a clean baseline, Figure~\ref{fig:ldamp_eig} shows
+$|E(t)|$ under an eigenmode-projected IC (top row) and a generic
+$\delta E$ IC (bottom row), for all available $N=2$ and $N=3$ closures.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_u2_landau_eigenmode}
+  \caption{Top row: eigenmode-projected IC.  Direct-$\beta$ N=2 and
+  direct-$\alpha$ N=3 (exact on eigenmode) decay cleanly along the
+  reference slope $e^{\gamma_{\rm kin}t}$.  Both NNs also decay but
+  level off at later times as approximation error accumulates.  The
+  kinetic $N_v{=}96$ curve is nearly flat: $O(10^{-14})$ mixing with
+  van~Kampen quasi-continuum modes dominates after $\sim\!10$ e-folds.
+  Bottom row: generic $\delta E$ IC; kinetic (black) is ground truth.}
+  \label{fig:ldamp_eig}
+\end{figure}
+
+Table~\ref{tab:offmfld} gives the mean relative error
+$\bar\epsilon=\langle|E_{\rm cl}-E_{\rm kin}|/|E_{\rm kin}|\rangle$
+over $t\in[5,30]$ for the generic-IC runs.  Four patterns stand out.
+\emph{NN naive$(r_1,r_2)$ N=3 is the best or joint-best}: the second
+input $r_2=\langle\beta(\xi)\rangle$ carries genuine off-eigenmode
+information about the spread of $\xi$ across modes.
+\emph{NN inference N=3 is the worst} (worse than even the
+parameter-free direct-$\alpha$): the inference bottleneck forces a
+single $\hat\xib$ inconsistent with multi-mode $r_1$ and $r_2$, and the
+exact Faddeeva at the compromised $\hat\xib$ amplifies the error.
+\emph{Direct-$\alpha$ N=3 is the second worst}: $\alpha$'s larger
+curvature amplifies the Jensen error relative to $\beta$.
+\emph{Direct-$\beta$ N=2 and NN$(r_1)$ N=2 are comparable}, as both
+use only $r_1$.
+
+\begin{table}[H]
+\centering
+\caption{Mean relative error vs.\ kinetic under generic $\delta E$ IC,
+  $t\in[5,30]$.  ``Naive'' NN maps $(r_1,r_2)\to\alpha$ directly;
+  ``Inference'' NN maps $(r_1,r_2)\to\hat\xib\to\alpha(\hat\xib)$.}
+\label{tab:offmfld}
+\begin{tabular}{lccccc}
+\toprule
+Case & Dir.\ $\beta$ N=2 & NN$(r_1)$ N=2 & Dir.\ $\alpha$ N=3 &
+  NN naive N=3 & NN inf.\ N=3 \\
+\midrule
+$\ub=2.0$, $k=0.30$ & 0.24 & 0.24 & 0.37 & \textbf{0.13} & 0.42 \\
+$\ub=1.5$, $k=0.40$ & 0.13 & 0.14 & 0.33 & \textbf{0.10} & 0.45 \\
+$\ub=1.0$, $k=0.50$ & 0.12 & \textbf{0.10} & 0.44 & 0.11 & 0.50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Extension to the $N=4$ hierarchy: Jensen error and superposition training}
+\label{sec:n4}
+
+The off-manifold diagnostic (Table~\ref{tab:offmfld}) shows that the naive
+$N=3$ NN is the best available closure at that truncation level.  This section
+asks whether adding one more moment ($U_3 \to U_4$ closure) allows the
+systematic Jensen error to be eliminated by training.
+
+\paragraph{Jensen error and degrees of freedom.}
+For a two-mode beam state
+$U_n = w_1 U_n^{(1)} + w_2 U_n^{(2)}$ the ideal closure is the
+amplitude-weighted average
+\begin{equation}
+  \hat\alpha_4 = w_1\,\alpha_4(\xib^{(1)}) + w_2\,\alpha_4(\xib^{(2)}).
+\end{equation}
+Whether any NN can learn this depends on whether its inputs uniquely determine
+$(\xib^{(1)},\xib^{(2)},w)\in\mathbb{C}^3$---six real unknowns.
+At $N=3$, inputs $(r_1, r_2)$ provide only four real numbers:
+\emph{underdetermined}.  No training data can teach a four-real-input closure
+to be Jensen-free, because the mapping from two-mode state to inputs is not
+injective.  At $N=4$, inputs $(r_1, r_2, r_3)$ provide six real numbers,
+matching the six unknowns: the system is \emph{generically solvable}.  The
+Jensen error is irreducible at $N=3$ and trainable at $N=4$.
+
+\paragraph{The $N=4$ hierarchy.}
+Extending by one moment gives state $y=(u,E,U_0,U_1,U_2,U_3)$ and closure
+$U_4 = \alpha_4(\xib)\,U_0$.  The additional evolution equation is
+\begin{equation}
+  \partial_t U_3 = -ik\ub U_3 - ik U_4 + \tfrac{3}{2}\,E,
+\end{equation}
+where the source $3M_2 E = \tfrac{3}{2}E$ comes from the Maxwellian second
+moment $M_2 = 1/2$.  Iterating the recurrence from $U_0 = Z'(\xib)$ gives the
+exact per-mode closure ratio
+\begin{equation}\label{eq:alpha4}
+  \alpha_4(\xib) \;\equiv\; \frac{U_4}{U_0}
+  \;=\; \xib^4 - \frac{\xib^2 + 3/2}{Z'(\xib)}.
+\end{equation}
+The three input ratios are $r_1 = \xib$, $r_2 = \beta(\xib)$
+(equation~\ref{eq:beta}), $r_3 = \alpha(\xib)$ (equation~\ref{eq:alpha}),
+giving a 6-real-input MLP $(64,64,64,64)$ that predicts $\alpha_4$ directly.
+
+\paragraph{Superposition training.}
+To make the NN Jensen-free, we augment the frequency-domain dataset with
+multi-mode samples.  The combined training set has three equal components
+($N = 16{,}384$ each):
+\begin{enumerate}\itemsep0pt
+  \item \emph{Single eigenmode}: $\xib$ uniform in the training rectangle
+        (same as before).
+  \item \emph{Complex-weight two-mode}: $\xib^{(1)}, \xib^{(2)}$ independently
+        sampled in the rectangle; weight $w = a/(1+a)$ with
+        $\log|a| \sim \mathrm{Uniform}(-1.5,1.5)$,
+        $\arg a \sim \mathrm{Uniform}(0,2\pi)$.
+        Pairs with $|\xib^{(1)}-\xib^{(2)}|<0.15$ or $|\alpha_4|>50$ are rejected.
+  \item \emph{Chord (real-weight two-mode)}: same mode pairs with real
+        $s\in(0.02,0.98)$ uniform.  This component is measure-zero in the
+        complex-weight distribution and must be included explicitly so the NN
+        sees the chord target during training.
+\end{enumerate}
+Total $\approx 50{,}000$ samples; Adam cosine $3\!\times\!10^{-3}\to10^{-5}$,
+$30{,}000$ steps.
+
+\paragraph{Chord test and results.}
+Figure~\ref{fig:n4chord} shows the chord test: fix a mode pair
+$(\xib^{(1)},\xib^{(2)})$, vary the real mixing weight $s\in[0,1]$, and
+compare each closure's output to the target chord
+$\alpha_4^{\rm chord}(s) = (1-s)\,\alpha_4(\xib^{(1)}) + s\,\alpha_4(\xib^{(2)})$.
+All single-eigenmode-trained closures---including the analytic
+direct-$\alpha_4$, which evaluates \eqref{eq:alpha4} at $r_1$ alone---trace
+curves that deviate from the chord because they were never exposed to
+superposition states.  The superposition-trained NN tracks the chord closely.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_n4_chord}
+  \caption{Chord test for the $N=4$ closure across three mode pairs (columns;
+  real part top row, imaginary part bottom row).
+  Black: ideal chord target.
+  Red dashed: direct-$\alpha_4$ (evaluates~\eqref{eq:alpha4} at $r_1$ only;
+  also develops spurious instability in time-domain at $t\gtrsim40$).
+  Blue dash-dot: $N=4$ NN, single-eigenmode training.
+  Green solid: $N=4$ NN, superposition training.}
+  \label{fig:n4chord}
+\end{figure}
+
+Table~\ref{tab:n4chord} quantifies the maximum relative chord error
+$\max_s|\hat\alpha_4(s)-\alpha_4^{\rm chord}(s)|/|\alpha_4^{\rm chord}(s)|$.
+
+\begin{table}[H]
+\centering
+\caption{Maximum relative chord error for the $N=4$ NN before and after
+superposition training.}
+\label{tab:n4chord}
+\begin{tabular}{lcc}
+\toprule
+Closure & Growing--growing & Landau-damped \\
+\midrule
+$N=4$ NN, single-mode training   & $5.8\%$    & $16.8\%$   \\
+$N=4$ NN, superposition training & $0.4\%$    & $6.4\%$    \\
+Reduction                        & $15\times$ & $2.6\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The $15\times$ improvement on growing--growing pairs confirms the DOF
+prediction: $N=4$ has sufficient information content to learn a Jensen-free
+closure.  The smaller improvement on Landau-damped pairs reflects a genuine
+physical limitation---rapid Landau decay requires phase mixing of van~Kampen
+continuum modes, which is inherently kinetic and cannot be reproduced by any
+finite-moment fluid closure regardless of training.  The residual Landau chord
+error at $N=4$ is therefore not a deficiency of the training scheme.
+
+\paragraph{Stability.}
+The analytic direct-$\alpha_4$ closure evaluates~\eqref{eq:alpha4} at $r_1$
+alone.  In time-domain integration it develops a spurious exponentially growing
+mode at $t\approx 40$, a pathology absent in the exact kinetic system that the
+per-mode formula does not suppress.  The $N=4$ NN closure, whose off-manifold
+behavior is constrained by training data, remains stable past $t=80$.
+
+% =====================================================================
+\section{Independent validation: slab ITG dispersion}
+\label{sec:itg}
+
+Every result so far is internal to the bump-on-tail system. As an
+independent check, we apply the same closures to a second linear
+instability in a different geometry: the slab ion-temperature-gradient
+(ITG) mode at zero finite-Larmor-radius (FLR), whose kinetic dispersion
+relation and fluid-closure comparison are worked out in
+Hammett \& Perkins, \emph{Phys.\ Rev.\ Lett.}\ \textbf{64}, 3019 (1990)
+[HP1990], Eq.~12. This is a genuinely different test: a single warm ion
+Maxwellian against an adiabatic electron response, with the free
+parameters $\eta_i=L_n/L_T$ (density/temperature gradient ratio) and
+$\zeta_*=\omega_*/(|k_\parallel|v_{ti}\sqrt2)$ (normalized diamagnetic
+drift frequency) replacing $(\ub/\vb,\varepsilon)$. Frequencies are
+normalized as $\zeta=\omega/(|k_\parallel|v_{ti}\sqrt2)$, and the
+dispersion relation is
+\begin{equation}\label{eq:Dslab}
+  D(\zeta) = 1-\eta_i\zeta_* +
+  \bigl[\zeta - \zeta_*\bigl(1-\tfrac{\eta_i}{2}+\eta_i\zeta^2\bigr)\bigr]
+  \,Z(\zeta) + \tau = 0,
+\end{equation}
+with $\tau=T_{i0}/T_{e0}$. Equation~\eqref{eq:Dslab} is evaluated with
+eight different substitutions for the ion susceptibility $Z(\zeta)$:
+exact kinetic; HP's recommended 3-moment closure ($\Gamma=3$, $\mu_1=0$,
+$\chi_1=2/\sqrt{\pi}$, identical to the $N{=}3$ Pad\'e closure used
+throughout this paper); a Braginskii-like variant ($\Gamma=5/3$,
+$\mu_1=0$); the bare Taylor-matched Pad\'e $N{=}3$ of
+Section~\ref{sec:pade-baseline}; the exact $N{=}2$/$N{=}3$ per-mode
+formulas $\beta,\alpha$ of Sections~\ref{sec:bilinear}
+and~\ref{sec:n2}; and the two trained NN closures of
+Sections~\ref{sec:results} and~\ref{sec:n4}. Each $Z(\zeta)$ is obtained
+from the corresponding closure's $U_0(\zeta)$ via $Z=(-U_0/2-1)/\zeta$
+(the inverse of \eqref{eq:U0} and $Z'=-2(1+\zeta Z)$).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_itg_threshold}
+  \caption{Slab ITG dispersion at $\zeta_*=1$, $\tau=1$. Left: growth
+  rate $\mathrm{Im}(\zeta)$ vs.\ $\eta_i$, maximum over both branches
+  (drift-wave, $\mathrm{Re}(\zeta)<0$, dominant for $\eta_i<2$; ITG,
+  $\mathrm{Re}(\zeta)>0$, dominant for $\eta_i>2$). Right: real
+  frequency of the most-unstable root. All eight closures cross
+  $\mathrm{Im}(\zeta)=0$ at exactly $\eta_i=2$; HP and BoT Pad\'e
+  $N{=}3$ are identical curves; both NN closures track kinetic within
+  $\sim\!1\%$ everywhere shown.}
+  \label{fig:itg}
+\end{figure}
+
+\paragraph{Threshold.} HP1990 report that their recommended values
+($\Gamma=3$, $\mu_1=0$, $\chi_1=2/\sqrt{\pi}$) reproduce the exact
+kinetic marginal-stability threshold $\eta_{\rm th}=2$, and that
+$\mu_1\neq0$ models do not. We confirm this numerically to 8 decimal
+places: every closure in Figure~\ref{fig:itg} --- not only HP, but also
+Brag-$\Gamma$, Pad\'e $N{=}3$, both exact per-mode formulas, and both
+NN closures, all of which share $\mu_1=0$ --- crosses
+$\mathrm{Im}(\zeta)=0$ at $\eta_i=2.00000000$. This isolates the role
+of $\mu_1$ precisely: at $\zeta\to0$ the threshold condition is
+$\mu_1$-dependent but \emph{independent of $\Gamma$}, so Brag-$\Gamma$
+gets the threshold exactly right despite using the ``wrong''
+($5/3$ vs.\ $3$) value of $\Gamma$. What $\Gamma=5/3$ instead degrades
+is the growth-rate \emph{slope} away from threshold: at $\eta_i=2.05$
+(just above threshold) Brag's slope is $\sim\!3\times$ steeper than
+HP's, and by $\eta_i=5$ HP overshoots kinetic by $+14.6\%$ while
+Brag-$\Gamma$ overshoots by $+7.7\%$ in the opposite direction of its
+near-threshold bias --- both far inside the $\lesssim\!1\%$ band of the
+two NN closures (Table~\ref{tab:itg}).
+
+\begin{table}[H]
+\centering
+\caption{Growth rate $\mathrm{Im}(\zeta)$ at $\eta_i=5$, $\zeta_*=1$,
+$\tau=1$ (cf.\ Figure~\ref{fig:itg}); relative error vs.\ kinetic in
+parentheses.}
+\label{tab:itg}
+\begin{tabular}{lr}
+\toprule
+Closure & $\mathrm{Im}(\zeta)$ (rel.\ err.) \\
+\midrule
+Kinetic (exact)         & $0.1941$ \\
+HP 3-moment ($\Gamma=3$) & $0.2225$ $(+14.6\%)$ \\
+Brag-$\Gamma$ ($\Gamma=5/3$) & $0.2091$ $(+7.7\%)$ \\
+BoT Pad\'e $N{=}3$      & $0.2225$ $(+14.6\%)$ \\
+$N{=}2$/$N{=}3$ exact    & $0.1941$ $(0.0\%)$ \\
+BoT $N{=}2$ NN          & $0.1929$ $(-0.6\%)$ \\
+BoT $N{=}4$ NN          & $0.1941$ $(0.0\%)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Consistency with the $N=3$ fix.} BoT Pad\'e $N{=}3$ and HP's
+3-moment closure are visually and numerically identical curves in
+Figure~\ref{fig:itg} (agreeing to the digits shown in
+Table~\ref{tab:itg}), which is the expected consequence of
+Section~\ref{sec:pade-baseline}: our $N{=}3$ closure \emph{is} the HP
+construction, not a Taylor match. Locating this ITG comparison surfaced
+two implementation bugs, both now fixed. First, the conversion from
+Pad\'e $U_0$ to $Z(\zeta)$ still assumed the pre-fix $U_0\approx
+-\sqrt\pi Z'(\xib)$ normalization (Section~\ref{sec:pade-baseline}),
+giving a badly wrong, visibly non-smooth Pad\'e curve until corrected
+to the $Z=(-U_0/2-1)/\zeta$ identity used throughout. Second, the root
+tracker for the two NN closures rejected converged Newton roots at
+residual $1.3\times10^{-8}$ against an overly tight
+$10^{-8}$ acceptance threshold, silently falling back to a coarse grid
+search that sometimes found nothing and defaulted to $\mathrm{Im}
+(\zeta){=}0$; this produced spurious sawtooth dips in the NN curves
+that disappeared once the tolerance was relaxed to $10^{-6}$ and
+continuity-seeded from the previous $\eta_i$'s root.
+
+\paragraph{Open item.} HP1990 additionally derive a closed-form
+growth-rate formula valid in the asymptotic limit $\zeta_{*i}\gg1$,
+$\zeta\ll1$ (their unnumbered near-threshold equation), predicting a
+universal threshold $\eta_{\rm th}=\Gamma-1+2\chi_1\mu_1$ independent
+of $\zeta_*$. This is a different limit from $\zeta_*=1$ used in
+Figure~\ref{fig:itg} above (where the threshold instead follows the
+exact, $\Gamma$-independent relation $\eta_{\rm th}=(1+\tau)/\zeta_*$,
+which happens to equal $2$ at $\zeta_*=\tau=1$ as well). We attempted a
+companion check of this asymptotic formula at $\zeta_*\gg1$ by tracking
+the corresponding root via Newton continuation from $\zeta_*=1$,
+via direct grid search at $\zeta_*\in\{10,20,50,100\}$, and by seeding
+Newton directly from the formula's own predicted root; none reliably
+isolated a stable, $\eta_i$-dependent small-$\zeta$ branch matching
+HP1990's description once $\zeta_*\gtrsim2$. We report this as an open
+item rather than a validated result: either our $\zeta_*$ normalization
+in \eqref{eq:Dslab} does not match HP1990's convention exactly outside
+the $\zeta_*=1$ case checked above, or the asymptotic branch requires a
+more careful leading-order derivation to seed correctly than the
+numerical search attempted here.
+
 % =====================================================================
 \section{Discussion}
 
@@ -697,6 +1328,52 @@ rational-order ceiling for NN expressivity; the present work shows the
 fluid response problem itself isn't the obstacle --- training-data design
 is.
 
+\paragraph{Inference vs.\ naive NN architecture.}
+At $N=3$, two distinct NN parameterisations have been tested.  The
+\emph{inference} architecture maps $(r_1,r_2)\to\hat\xib$ and then
+evaluates $\alpha(\hat\xib)$ via the exact Faddeeva function.  The
+\emph{naive} architecture maps $(r_1,r_2)\to\alpha$ directly.
+
+On the single-eigenmode manifold, both are equivalent by construction:
+$(r_1,r_2)$ determines $\xib$ uniquely, so the inversion is exact and
+the two designs converge to the same prediction.  Off eigenmode---as
+quantified in Table~\ref{tab:offmfld}---they diverge sharply.  The
+inference NN is the \emph{worst} performer (42--50\% mean relative
+error), worse than the parameter-free direct-$\alpha$.  The reason is
+structural: in a multi-mode state, $r_1=\langle\xi\rangle$ and
+$r_2=\langle\beta(\xi)\rangle$ cannot simultaneously be consistent with
+any single $\hat\xib$, so the NN settles on a compromised value, and the
+exact Faddeeva applied there amplifies rather than corrects the error.
+The inference design embeds the wrong physical assumption---that the beam
+is always in a single eigenmode---directly into the architecture.
+
+The naive NN carries no such assumption.  Its direct $(r_1,r_2)\to\alpha$
+map learns a smooth, non-multiplicative function that implicitly
+approximates $\langle\alpha(\xi)\rangle$ from partial moment information,
+without committing to any single-resonance picture.  This makes it the
+most robust closure when multiple modes are simultaneously present, which
+is the generic situation in a fluid simulation.
+
+The practical recommendation is therefore: \emph{train the NN as a direct
+map from moment ratios to the closure coefficient, not as an inference
+engine for an intermediate physical parameter.}  The exact Faddeeva is
+beneficial only when $\xib$ is known exactly; when it must itself be
+inferred from multi-mode moment data, the inversion error propagates
+nonlinearly.
+
+\paragraph{Even-moment closures.}
+As shown in Section~\ref{sec:n2}, the $N=2$ closure illustrates the
+complementary case where no NN is needed at all: the inference map is
+trivial ($r_1=\xib$), the exact $\beta$ is analytically available, and
+its off-manifold behavior is already superior to any linear approximation.
+The interesting NN problem arises at higher levels where the per-mode
+formula involves multiple Maxwellian moments and the Jensen error reappears.
+Section~\ref{sec:n4} shows that the $N=4$ level is the first at which the
+Jensen error is information-theoretically trainable: the additional
+input $r_3 = \alpha(\xib)$ supplies the two real degrees of freedom
+needed to resolve a two-mode superposition, and superposition training
+achieves a $15\times$ reduction in growing-mode chord error.
+
 \section*{Code}
 
 The accompanying \texttt{bot/} package implements all figures and runs:
@@ -705,15 +1382,27 @@ The accompanying \texttt{bot/} package implements all figures and runs:
     closed fluid response.
   \item \texttt{closures/naive\_nn.py} --- NN closure (MLP $\to \alpha$),
     closed-form $\xib$-sampling dataset, training.
+  \item \texttt{closures/n4\_nn.py} --- $N=4$ NN closure
+    ($\mathrm{MLP}_{N=4} : (r_1,r_2,r_3) \to \alpha_4$), single-mode
+    dataset, three-component superposition dataset, and training;
+    checkpoints \texttt{runs/n4\_nn.eqx} (single-mode) and
+    \texttt{runs/n4\_nn\_super.eqx} (superposition).
+  \item \texttt{closures/u2.py} --- $\beta(\xib)$ exact formula, MLP$_{u2}$
+    (2-input NN for $\beta$), training utilities.
   \item \texttt{train\_simdata.py} --- sim-data NN training (single- and
     broad-sweep).
   \item \texttt{kinetic.py}, \texttt{fluid.py} --- kinetic ground truth and
     two-fluid eigenvalue system.
   \item \texttt{closed\_loop.py} --- time-domain integration for all
-    closures.
+    closures; eigenmode IC helpers for $N=2$, $N=3$, $N=4$, and kinetic;
+    direct-$\alpha_4$ and NN$_{N=4}$ time-domain integrators.
   \item \texttt{sweep.py}, \texttt{sweep\_timedomain.py} --- 2D parameter
     scans.
-  \item \texttt{figures.py} --- all plots in this writeup.
+  \item \texttt{figures.py} --- $N=3$ plots and the $N=4$ chord figure
+    (\texttt{fig\_n4\_chord}).
+  \item \texttt{figures\_u2.py} --- $N=2$, Landau damping, and $N=2$/$N=3$
+    comparison plots; updated to include both $N=4$ model variants in the
+    two-mode Landau-damped time-domain panel.
 \end{itemize}
 
 \end{document}
