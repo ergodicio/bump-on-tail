@@ -87,6 +87,40 @@ def moment_ratios(xi):
     return U1 / U0, U2 / U0
 
 
+# ----- N=4 hierarchy: U_4 closure -----------------------------------------
+
+def alpha4(xi):
+    """Exact closure ratio U_4 / U_0 on a single linear eigenmode at xi_b.
+
+    Derivation via the moment recurrence (Phi = 1, M_0=1, M_1=0, M_2=1/2):
+        U_0 = Z'(xi)
+        U_1 = xi U_0
+        U_2 = xi U_1 - M_0       = xi^2 U_0 - 1
+        U_3 = xi U_2 - 2 M_1     = xi^3 U_0 - xi          (M_1 = 0)
+        U_4 = xi U_3 - 3 M_2     = xi^4 U_0 - xi^2 - 3/2
+
+    So U_4/U_0 = xi^4 - (xi^2 + 3/2) / Z'(xi).
+
+    Equivalently: alpha4(xi) = xi * alpha(xi) - (3/2) / Z'(xi).
+    """
+    return xi**4 - (xi**2 + 1.5) / Zprime(xi)
+
+
+def moments_at_xi_n4(xi):
+    """Return (U_0, U_1, U_2, U_3) at xi_b with Phi = 1."""
+    U0 = Zprime(xi)
+    U1 = xi * U0
+    U2 = xi * U1 - 1.0          # M_0 = 1
+    U3 = xi * U2                 # M_1 = 0
+    return U0, U1, U2, U3
+
+
+def moment_ratios_n4(xi):
+    """(U_1/U_0, U_2/U_0, U_3/U_0) at xi_b -- the N=4 closure NN input."""
+    U0, U1, U2, U3 = moments_at_xi_n4(xi)
+    return U1 / U0, U2 / U0, U3 / U0
+
+
 # ----- equinox MLP ----------------------------------------------------------
 
 class MLP(eqx.Module):

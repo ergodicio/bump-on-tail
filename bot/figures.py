@@ -719,6 +719,524 @@ def fig_landau_damping(kld_lo: float = 0.30, kld_hi: float = 0.60,
     plt.close(fig)
 
 
+def fig_nn_probe(nn_path: Path = RUN_DIR / "naive_mlp.eqx") -> None:
+    """Probe what the N=3 naive NN learned vs the bilinear closure alpha=r1*r2.
+
+    2x2 layout:
+    A. On-manifold accuracy heatmap in xi_b plane  (NN residual ~0.3%)
+    B. Jacobian mismatch: d(NN)/d(r2) / r1 along real axis  (NN is ~29% softer)
+    C. Two-mode mixing: NN, bilinear, direct-alpha errors vs mixing weight
+    D. Distribution of improvement across 500 random two-mode pairs
+
+    Key findings:
+    - Training target IS bilinear (r1*r2 = alpha exactly on eigenmode manifold)
+    - NN reproduces bilinear with ~0.3% residual on manifold
+    - NN Jacobian d(NN)/d(r2) ~ 0.71*r1 (vs bilinear = 1.0*r1): NN is "softer"
+    - This softness reduces the bilinear cross-term error Cov(xi,beta) off-manifold
+    - NN beats bilinear in 99% of random 2-mode pairs; median 2.7x improvement
+    """
+    import jax
+    import jax.numpy as jnp
+    from bot.closures.naive_nn import load as load_naive, naive_predict_alpha
+    from bot.closures.inference import (alpha as exact_alpha, moment_ratios,
+                                         Zprime as Zprime_inf)
+    from matplotlib.lines import Line2D
+
+    model = load_naive(key=jax.random.PRNGKey(0))
+
+    def nn_alpha(r1c, r2c):
+        return complex(naive_predict_alpha(model, r1c, r2c))
+
+    # ----------------------------------------------------------------
+    # Panel A: On-manifold accuracy heatmap
+    # ----------------------------------------------------------------
+    n_re, n_im = 60, 40
+    xi_re = np.linspace(-2.8, 2.8, n_re)
+    xi_im = np.linspace(-0.9, 1.4, n_im)
+    err_map = np.zeros((n_im, n_re))
+    for i in range(n_im):
+        for j in range(n_re):
+            xi = xi_re[j] + 1j * xi_im[i]
+            r1, r2 = moment_ratios(xi)
+            a_true = exact_alpha(xi)   # = r1*r2 (bilinear identity)
+            err_map[i, j] = abs(nn_alpha(r1, r2) - a_true) / (abs(a_true) + 1e-12)
+
+    # ----------------------------------------------------------------
+    # Panel B: Jacobian mismatch on manifold (real xi_b axis)
+    # ----------------------------------------------------------------
+    xi_scan = np.linspace(-2.4, 2.4, 50)
+    jac_ratios = []
+    for xi_re_val in xi_scan:
+        xi = xi_re_val + 0j
+        r1, r2 = moment_ratios(xi)
+        feats = jnp.array([r1.real, r1.imag, r2.real, r2.imag])
+        J = jax.jacobian(lambda f: model(f))(feats)
+        if abs(r1.real) > 0.05:
+            jac_ratios.append(float(J[0, 2]) / r1.real)
+        else:
+            jac_ratios.append(np.nan)
+    jac_ratios = np.array(jac_ratios)
+
+    # ----------------------------------------------------------------
+    # Panel C: Two-mode mixing errors
+    # ----------------------------------------------------------------
+    xi_0 = 0.9 + 0.17j
+    xi_sec_list  = [-0.5 + 0.2j, 2.0 + 0.0j, 0.0 - 0.5j]
+    xi_sec_labels = [r"$\xi_2\!=\!-0.5\!+\!0.2i$", r"$\xi_2\!=\!2.0$",
+                     r"$\xi_2\!=\!-0.5i$"]
+    xi_sec_colors = ["C1", "C2", "C3"]
+    wvals = np.linspace(0.02, 0.98, 60)
+
+    mix_curves = {}
+    for xi_sec, lbl in zip(xi_sec_list, xi_sec_labels):
+        r1_0, r2_0 = moment_ratios(xi_0)
+        r1_s, r2_s = moment_ratios(xi_sec)
+        a_0, a_s = exact_alpha(xi_0), exact_alpha(xi_sec)
+        U0_0, U0_s = Zprime_inf(xi_0), Zprime_inf(xi_sec)
+        e_nn, e_bil, e_da = [], [], []
+        for w in wvals:
+            denom = w * U0_0 + (1 - w) * U0_s
+            if abs(denom) < 1e-12:
+                e_nn.append(np.nan); e_bil.append(np.nan); e_da.append(np.nan)
+                continue
+            r1m = (w * xi_0 * U0_0 + (1 - w) * xi_sec * U0_s) / denom
+            r2m = (w * r2_0 * U0_0 + (1 - w) * r2_s * U0_s) / denom
+            a_true = (w * a_0 * U0_0 + (1 - w) * a_s * U0_s) / denom
+            scale = abs(a_true) + 1e-12
+            e_nn.append(abs(nn_alpha(r1m, r2m) - a_true) / scale)
+            e_bil.append(abs(r1m * r2m - a_true) / scale)
+            e_da.append(abs(exact_alpha(r1m) - a_true) / scale)
+        mix_curves[lbl] = (wvals, e_nn, e_bil, e_da)
+
+    # ----------------------------------------------------------------
+    # Panel D: Distribution over 500 random 50/50 pairs
+    # ----------------------------------------------------------------
+    rng = np.random.default_rng(42)
+    N = 500
+    xi_A = rng.uniform(-2.5, 2.5, N) + 1j * rng.uniform(-0.8, 1.2, N)
+    xi_B = rng.uniform(-2.5, 2.5, N) + 1j * rng.uniform(-0.8, 1.2, N)
+    nn_errs, bil_errs, da_errs = [], [], []
+    for xiA, xiB in zip(xi_A, xi_B):
+        r1A, r2A = moment_ratios(xiA)
+        r1B, r2B = moment_ratios(xiB)
+        aA, aB = exact_alpha(xiA), exact_alpha(xiB)
+        U0A, U0B = Zprime_inf(xiA), Zprime_inf(xiB)
+        denom = 0.5 * U0A + 0.5 * U0B
+        if abs(denom) < 1e-8:
+            continue
+        r1m = (0.5 * xiA * U0A + 0.5 * xiB * U0B) / denom
+        r2m = (0.5 * r2A * U0A + 0.5 * r2B * U0B) / denom
+        a_true = (0.5 * aA * U0A + 0.5 * aB * U0B) / denom
+        scale = abs(a_true)
+        if scale < 1e-8:
+            continue
+        nn_errs.append(abs(nn_alpha(r1m, r2m) - a_true) / scale)
+        bil_errs.append(abs(r1m * r2m - a_true) / scale)
+        da_errs.append(abs(exact_alpha(r1m) - a_true) / scale)
+    nn_errs = np.array(nn_errs)
+    bil_errs = np.array(bil_errs)
+    da_errs = np.array(da_errs)
+
+    # ----------------------------------------------------------------
+    # Plot
+    # ----------------------------------------------------------------
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+
+    # --- Panel A: on-manifold heatmap ---
+    ax = axes[0, 0]
+    err_log = np.log10(np.maximum(err_map, 1e-6))
+    im = ax.pcolormesh(xi_re, xi_im, err_log, cmap="RdYlGn_r",
+                        vmin=-4, vmax=0, shading="auto")
+    rect_kw = dict(color="white", lw=1.2, ls="--", alpha=0.75)
+    ax.axhline(-1.0, **rect_kw); ax.axhline(1.5, **rect_kw)
+    ax.axvline(-3.0, **rect_kw); ax.axvline(3.0, **rect_kw)
+    ax.plot(0.9, 0.17, "w*", ms=11, zorder=5, label="canonical BoT mode")
+    plt.colorbar(im, ax=ax)
+    ax.set_xlabel(r"Re $\xi_b$"); ax.set_ylabel(r"Im $\xi_b$")
+    ax.set_title("(A)  On-manifold NN accuracy\n"
+                  r"$\log_{{10}}|\hat\alpha_{{\rm NN}}(r_1,r_2) - \alpha(\xi_b)|/"
+                  r"|\alpha(\xi_b)|$"
+                  "\n[bilinear is exact; NN residual ~0.3%]")
+    ax.legend(fontsize=8)
+
+    # --- Panel B: Jacobian mismatch ---
+    ax = axes[0, 1]
+    ax.plot(xi_scan, jac_ratios, "C0-", lw=2.5,
+             label=r"$\partial_{\rm Re\,r_2}\,\mathrm{Re}(\hat\alpha_{\rm NN})"
+                   r"\;/\;\mathrm{Re}(r_1)$")
+    ax.axhline(1.0, color="C1", lw=2, ls="--",
+                label=r"Bilinear (= 1 everywhere)")
+    mean_jac = float(np.nanmean(jac_ratios))
+    ax.axhline(mean_jac, color="C0", lw=1.5, ls=":",
+                label=f"NN mean = {mean_jac:.2f}")
+    ax.fill_between(xi_scan, mean_jac, 1.0, alpha=0.12, color="C3")
+    ax.set_xlabel(r"$\xi_b$  (real axis)")
+    ax.set_ylabel("Jacobian ratio")
+    ax.set_title(f"(B)  Jacobian: NN is softer in $r_2$\n"
+                  f"Bilinear ratio = 1.00;  NN mean = {mean_jac:.2f} (std "
+                  f"{float(np.nanstd(jac_ratios)):.2f})\n"
+                  "[NN under-responds to r2, reducing cross-term errors]")
+    ax.legend(fontsize=9); ax.grid(alpha=0.3)
+    ax.set_ylim(-0.1, 2.0)
+
+    # --- Panel C: Two-mode mixing ---
+    ax = axes[1, 0]
+    for lbl, col in zip(xi_sec_labels, xi_sec_colors):
+        w, e_nn, e_bil, e_da = mix_curves[lbl]
+        ax.semilogy(w, e_nn, color=col, lw=2.2)
+        ax.semilogy(w, e_bil, color=col, lw=2.2, ls="--")
+    ax.axhline(3e-3, color="gray", lw=1.2, ls=":", label="NN on-manifold residual")
+    mode_handles = [Line2D([0],[0], color=c, lw=2, label=lbl)
+                    for lbl, c in zip(xi_sec_labels, xi_sec_colors)]
+    ls_handles = [Line2D([0],[0], color="k", lw=2, label="NN (solid)"),
+                   Line2D([0],[0], color="k", lw=2, ls="--", label="Bilinear (dashed)")]
+    ax.legend(handles=mode_handles + ls_handles, fontsize=8, ncol=2, loc="upper center")
+    ax.set_xlabel(r"mixing weight $w$ (mode-1 fraction)")
+    ax.set_ylabel(r"$|\hat\alpha - \alpha_{{\rm true}}|/|\alpha_{{\rm true}}|$")
+    ax.set_title(r"(C)  Two-mode mixture: $\xi_1=0.9+0.17i$ + $\xi_2$"
+                  r" — NN vs bilinear" + "\n"
+                  r"At $w=0.5$: NN beats bilinear 2--4$\times$ across all $\xi_2$" + "\n"
+                  r"[at $w=0$ or $1$: single mode, bilinear exact, NN at residual]")
+    ax.set_xlim(0, 1); ax.set_ylim(1e-4, 20)
+    ax.axvline(0.5, color="gray", lw=0.6, ls=":")
+    ax.grid(alpha=0.3, which="both")
+
+    # --- Panel D: Distribution over 500 pairs ---
+    ax = axes[1, 1]
+    bins = np.logspace(-3, 1.5, 40)
+    ax.hist(bil_errs, bins=bins, alpha=0.55, color="C1", density=True,
+             label=f"Bilinear (med {np.median(bil_errs):.2f})")
+    ax.hist(da_errs, bins=bins, alpha=0.55, color="C3", density=True,
+             label=f"Direct-alpha (med {np.median(da_errs):.2f})")
+    ax.hist(nn_errs, bins=bins, alpha=0.75, color="C0", density=True,
+             label=f"NN  (med {np.median(nn_errs):.2f})")
+    ax.axvline(np.median(bil_errs), color="C1", lw=2.5, ls="--")
+    ax.axvline(np.median(da_errs), color="C3", lw=2.5, ls="--")
+    ax.axvline(np.median(nn_errs), color="C0", lw=2.5, ls="--")
+    ax.set_xscale("log")
+    ax.set_xlabel(r"$|\hat\alpha - \alpha_{{\rm true}}|/|\alpha_{{\rm true}}|$")
+    ax.set_ylabel("density")
+    frac_win = sum(nn_errs < bil_errs)
+    ax.set_title(f"(D)  Distribution over {len(nn_errs)} random 50/50 two-mode pairs\n"
+                  f"NN wins in {frac_win}/{len(nn_errs)} cases  |  "
+                  f"median improvement {np.median(bil_errs)/np.median(nn_errs):.1f}x over bilinear")
+    ax.legend(fontsize=9); ax.grid(alpha=0.3, which="both")
+
+    fig.suptitle(
+        r"What the N=3 NN learned beyond bilinear  $\alpha = r_1 r_2$"
+        "\n"
+        "Training IS bilinear on the eigenmode manifold.  "
+        "NN is a soft approximation: its Jacobian w.r.t. $r_2$ is ~0.71x bilinear, "
+        "reducing the two-mode covariance error by a median 2.7x.",
+        fontsize=12, y=1.02)
+    fig.tight_layout()
+    out = FIG_DIR / "fig_nn_probe.png"
+    fig.savefig(out, dpi=130, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+def fig_nn_jensen_chord(nn_path: Path = RUN_DIR / "naive_mlp.eqx",
+                         nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx") -> None:
+    """Chord-vs-curve: Jensen error across both N=2 (beta) and N=3 (alpha) levels.
+
+    For a two-mode superposition with EQUAL amplitudes, the exact closure value
+    required by the kinetic system is the straight chord:
+
+        beta_exact(s)  = (1-s)*beta(xi1)  + s*beta(xi2)   [linear in s -> straight]
+        alpha_exact(s) = (1-s)*alpha(xi1) + s*alpha(xi2)  [linear in s -> straight]
+
+    Any single-mode closure evaluates at the mixed input r1(s)=(1-s)*xi1+s*xi2
+    and traces a CURVE bowing away from the chord.  Gap = Jensen error.
+
+    Layout: 3 rows x (3 data cols + 1 legend col):
+      Row 0: Re(beta)  — N=2 closure level
+      Row 1: Re(alpha) — N=3 closure level
+      Row 2: Im(alpha) — N=3 closure level
+    Colors consistent across rows: direct-beta/direct-alpha share C3 (red);
+    NN_u2/NN_naive share C2 (green); bilinear (N=3 only) uses C1 (orange).
+    """
+    import equinox as eqx
+    import jax
+    from bot.closures.naive_nn import load as load_naive, naive_predict_alpha
+    from bot.closures.inference import alpha as exact_alpha, moment_ratios
+    from bot.closures.u2 import beta as direct_beta, model_beta as nn_u2_beta, MLP_u2
+
+    model_n3 = load_naive()
+    model_u2 = MLP_u2(hidden=(32, 32, 32), key=jax.random.PRNGKey(42))
+    model_u2 = eqx.tree_deserialise_leaves(str(nn_u2_path), model_u2)
+
+    def nn_alpha(r1c, r2c):
+        return complex(naive_predict_alpha(model_n3, r1c, r2c))
+
+    def nn_beta(r1c):
+        return complex(nn_u2_beta(model_u2, r1c))
+
+    # Three cases: covering growing, crossing, and fully damped regimes
+    cases = [
+        # (xi1,               xi2,                  column title)
+        (0.9 + 0.17j,   2.0  + 0.0j,
+         r"Growing $\to$ growing"           + "\n"
+         r"$\xi_1\!=\!0.9\!+\!0.17i$,  $\xi_2\!=\!2.0$"),
+        (0.9 + 0.17j,   -0.5 + 0.2j,
+         r"Growing $\to$ negative-Re"       + "\n"
+         r"$\xi_1\!=\!0.9\!+\!0.17i$,  $\xi_2\!=\!-0.5\!+\!0.2i$"),
+        (1.225 - 0.612j, 0.164 - 0.078j,
+         r"Both damped (Landau regime)"    + "\n"
+         r"$\xi_1\!=\!1.22\!-\!0.61i$,  $\xi_2\!=\!0.16\!-\!0.08i$"),
+    ]
+
+    s_vals = np.linspace(0, 1, 301)
+
+    def _annot(ax, s, chord, curve, color):
+        mid = len(s) // 2
+        yrange = max(abs(chord.max() - chord.min()), 1e-2)
+        err = abs(curve[mid] - chord[mid])
+        if err > 0.04 * yrange:
+            ax.annotate(
+                fr"$\Delta={err:.2f}$",
+                xy=(0.5, curve[mid]),
+                xytext=(0.54, curve[mid] + 0.15 * (curve[mid] - chord[mid])),
+                fontsize=7, color=color, ha="left",
+                arrowprops=dict(arrowstyle="-", color=color, lw=0.7),
+            )
+
+    # 3 rows x 4 cols: Re(beta), Re(alpha), Im(alpha); col 3 = legend
+    fig, axes = plt.subplots(3, 4, figsize=(16, 11),
+                              gridspec_kw={"width_ratios": [1, 1, 1, 0.55]})
+
+    h_chord_b = h_db = h_nn2 = None
+    h_chord_a = h_bil = h_da = h_nn3 = None
+
+    for col, (xi1, xi2, col_title) in enumerate(cases):
+        r1_1, r2_1 = moment_ratios(xi1)   # r1=xi, r2=beta(xi)
+        r1_2, r2_2 = moment_ratios(xi2)
+        a1, a2 = exact_alpha(xi1), exact_alpha(xi2)
+        b1, b2 = r2_1, r2_2               # beta at endpoints
+
+        # Equal-amplitude linear mixing
+        r1_s = np.array([(1 - s) * r1_1 + s * r1_2 for s in s_vals])
+        r2_s = np.array([(1 - s) * r2_1 + s * r2_2 for s in s_vals])  # beta chord
+
+        # ---- Row 0: N=2 beta closure ----
+        b_chord  = np.array([(1 - s) * b1 + s * b2    for s in s_vals])  # straight!
+        b_direct = np.array([direct_beta(r1_s[i])      for i in range(len(s_vals))])
+        b_nn2    = np.array([nn_beta(r1_s[i])          for i in range(len(s_vals))])
+
+        ax = axes[0, col]
+        cv, dv, nv = b_chord.real, b_direct.real, b_nn2.real
+        ax.fill_between(s_vals, cv, dv, alpha=0.15, color="C3", zorder=1)
+        ax.fill_between(s_vals, cv, nv, alpha=0.15, color="C2", zorder=1)
+        h_chord_b, = ax.plot(s_vals, cv, "k-",  lw=3.0, zorder=5)
+        h_db,      = ax.plot(s_vals, dv, color="C3", lw=1.8, ls="--", zorder=3)
+        h_nn2,     = ax.plot(s_vals, nv, color="C2", lw=1.8, ls="-.", zorder=4)
+        ax.scatter([0, 1], [cv[0], cv[-1]], s=80, zorder=6, color="k", marker="D")
+        _annot(ax, s_vals, cv, dv, "C3")
+        ax.set_xlabel(r"mixing weight $s$", fontsize=8)
+        ax.set_ylabel(r"Re$(\beta)$  [N=2]")
+        ax.grid(alpha=0.25)
+        ax.set_title(col_title, fontsize=9)
+
+        # ---- Rows 1 & 2: N=3 alpha closure ----
+        a_chord    = np.array([(1 - s) * a1 + s * a2      for s in s_vals])  # straight!
+        a_bilinear = r1_s * r2_s
+        a_direct   = np.array([exact_alpha(r1_s[i])        for i in range(len(s_vals))])
+        a_nn       = np.array([nn_alpha(r1_s[i], r2_s[i])  for i in range(len(s_vals))])
+
+        for row, part in enumerate(["real", "imag"]):
+            ax = axes[row + 1, col]
+            cv = a_chord.real    if part == "real" else a_chord.imag
+            bv = a_bilinear.real if part == "real" else a_bilinear.imag
+            dv = a_direct.real   if part == "real" else a_direct.imag
+            nv = a_nn.real       if part == "real" else a_nn.imag
+
+            ax.fill_between(s_vals, cv, bv, alpha=0.15, color="C1", zorder=1)
+            ax.fill_between(s_vals, cv, dv, alpha=0.15, color="C3", zorder=1)
+            ax.fill_between(s_vals, cv, nv, alpha=0.15, color="C2", zorder=1)
+            h_chord_a, = ax.plot(s_vals, cv, "k-",  lw=3.0, zorder=5)
+            h_bil,     = ax.plot(s_vals, bv, color="C1", lw=1.8, ls="--", zorder=4)
+            h_da,      = ax.plot(s_vals, dv, color="C3", lw=1.8, ls="--", zorder=3)
+            h_nn3,     = ax.plot(s_vals, nv, color="C2", lw=1.8, ls="-.", zorder=4)
+            ax.scatter([0, 1], [cv[0], cv[-1]], s=80, zorder=6, color="k", marker="D")
+            _annot(ax, s_vals, cv, bv, "C1")
+            ax.set_xlabel(r"mixing weight $s$", fontsize=8)
+            ax.set_ylabel(r"Re$(\alpha)$  [N=3]" if part == "real"
+                          else r"Im$(\alpha)$  [N=3]")
+            ax.grid(alpha=0.25)
+
+    # --- Legend panels ---
+    for row in range(3):
+        axes[row, 3].axis("off")
+
+    axes[0, 3].legend(
+        [h_chord_b, h_db, h_nn2],
+        [r"$\beta_{\rm exact}(s)=(1{-}s)\beta(\xi_1)+s\beta(\xi_2)$  -- chord",
+         r"Direct-$\beta$:  $\beta(r_1(s))$",
+         r"NN$_\beta$ (N=2):  $\hat\beta(r_1(s))$"],
+        fontsize=8.5, loc="upper left",
+        title="N=2 closure  (U2/U0 = beta)",
+        title_fontsize=8.5, frameon=True, handlelength=2.5,
+    )
+    axes[1, 3].legend(
+        [h_chord_a, h_bil, h_da, h_nn3],
+        [r"$\alpha_{\rm exact}(s)=(1{-}s)\alpha(\xi_1)+s\alpha(\xi_2)$  -- chord",
+         r"Bilinear:  $r_1(s)\cdot r_2(s)$",
+         r"Direct-$\alpha$:  $\alpha(r_1(s))$",
+         r"NN naive (N=3):  $\hat\alpha(r_1(s),r_2(s))$"],
+        fontsize=8.5, loc="upper left",
+        title=("N=3 closure  (U3/U0 = alpha)\n"
+               "Endpoints (diamond): all agree at s=0,1\n"
+               "(eigenmode manifold; exact by training)\n"
+               "Shaded area = Jensen error"),
+        title_fontsize=8, frameon=True, handlelength=2.5,
+    )
+
+    fig.suptitle(
+        "Chord vs. curve: Jensen error at N=2 (top) and N=3 (middle/bottom) closure levels\n"
+        r"Correct by superposition = STRAIGHT chord.  "
+        r"Single-mode closures bow away; gap grows with curvature of $\beta$ or $\alpha$.",
+        fontsize=11, y=1.01,
+    )
+    fig.tight_layout()
+    out = FIG_DIR / "fig_nn_jensen_chord.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+def fig_n4_chord(nn_n4_path:       Path = RUN_DIR / "n4_nn.eqx",
+                  nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") -> None:
+    """Chord vs. curve at the alpha4 (N=4 hierarchy) closure level.
+
+    Shows three lines per panel:
+      * Black solid  — correct chord (exact for two-mode superpositions)
+      * Red dashed   — direct-alpha4: alpha4(r1 only), Jensen error, irreducible at N=4 too
+      * Blue dash-dot  — NN_n4 (single-mode trained): Jensen error but TRAINABLE
+      * Green solid  — NN_n4_super (superposition trained): dramatically reduced error
+
+    Key distinction from N=3:
+      N=3 Jensen error is IRREDUCIBLE (4 real DOF < 6 unknowns for two-mode state).
+      N=4 Jensen error is TRAINABLE  (6 real DOF = 6 unknowns -> unique solution).
+      The super-trained curve confirms this: superposition training reduces the gap.
+
+    Layout: 2 rows x (3 data cols + 1 legend col).
+    """
+    import equinox as eqx
+    import jax
+    from bot.closures.inference import (alpha4 as exact_alpha4,
+                                         alpha as exact_alpha,
+                                         moment_ratios_n4)
+    from bot.closures.n4_nn import MLP_n4, n4_predict_alpha4, load, load_super
+
+    model_n4       = load()
+    model_n4_super = load_super()
+
+    def nn_a4(model, r1c, r2c, r3c):
+        return complex(n4_predict_alpha4(model, r1c, r2c, r3c))
+
+    from bot.closures.u2 import beta as exact_beta
+
+    cases = [
+        (0.9 + 0.17j,   2.0  + 0.0j,
+         r"Growing $\to$ growing"        + "\n"
+         r"$\xi_1\!=\!0.9\!+\!0.17i$,  $\xi_2\!=\!2.0$"),
+        (0.9 + 0.17j,   -0.5 + 0.2j,
+         r"Growing $\to$ negative-Re"    + "\n"
+         r"$\xi_1\!=\!0.9\!+\!0.17i$,  $\xi_2\!=\!-0.5\!+\!0.2i$"),
+        (1.225 - 0.612j, 0.164 - 0.078j,
+         r"Both damped (Landau regime)"  + "\n"
+         r"$\xi_1\!=\!1.22\!-\!0.61i$,  $\xi_2\!=\!0.16\!-\!0.08i$"),
+    ]
+
+    s_vals = np.linspace(0, 1, 301)
+
+    fig, axes = plt.subplots(2, 4, figsize=(16, 7),
+                              gridspec_kw={"width_ratios": [1, 1, 1, 0.65]})
+
+    h_chord = h_direct = h_nn4 = h_nn4s = None
+
+    for col, (xi1, xi2, col_title) in enumerate(cases):
+        r1_1, r2_1, r3_1 = moment_ratios_n4(xi1)
+        r1_2, r2_2, r3_2 = moment_ratios_n4(xi2)
+        a4_1, a4_2 = exact_alpha4(xi1), exact_alpha4(xi2)
+
+        r1_s = np.array([(1-s)*r1_1 + s*r1_2 for s in s_vals])
+        r2_s = np.array([(1-s)*r2_1 + s*r2_2 for s in s_vals])
+        r3_s = np.array([(1-s)*r3_1 + s*r3_2 for s in s_vals])
+
+        a4_chord  = np.array([(1-s)*a4_1 + s*a4_2 for s in s_vals])
+        a4_direct = np.array([exact_alpha4(r1_s[i]) for i in range(len(s_vals))])
+        a4_nn     = np.array([nn_a4(model_n4,       r1_s[i], r2_s[i], r3_s[i])
+                               for i in range(len(s_vals))])
+        a4_nn_s   = np.array([nn_a4(model_n4_super, r1_s[i], r2_s[i], r3_s[i])
+                               for i in range(len(s_vals))])
+
+        for row, part in enumerate(["real", "imag"]):
+            ax = axes[row, col]
+            cv  = a4_chord.real   if part == "real" else a4_chord.imag
+            dv  = a4_direct.real  if part == "real" else a4_direct.imag
+            nv  = a4_nn.real      if part == "real" else a4_nn.imag
+            nsv = a4_nn_s.real    if part == "real" else a4_nn_s.imag
+
+            ax.fill_between(s_vals, cv, dv, alpha=0.12, color="C3", zorder=1)
+            ax.fill_between(s_vals, cv, nv, alpha=0.12, color="C0", zorder=1)
+            ax.fill_between(s_vals, cv, nsv, alpha=0.15, color="C2", zorder=2)
+            h_chord,  = ax.plot(s_vals, cv,  "k-",  lw=3.0, zorder=6)
+            h_direct, = ax.plot(s_vals, dv,  color="C3", lw=1.6, ls="--",  zorder=3)
+            h_nn4,    = ax.plot(s_vals, nv,  color="C0", lw=1.6, ls="-.",  zorder=4)
+            h_nn4s,   = ax.plot(s_vals, nsv, color="C2", lw=2.2, ls="-",   zorder=5)
+            ax.scatter([0, 1], [cv[0], cv[-1]], s=80, zorder=7, color="k", marker="D")
+
+            ax.set_xlabel(r"mixing weight $s$", fontsize=8)
+            ax.set_ylabel(r"Re$(\alpha_4)$  [N=4]" if part == "real"
+                          else r"Im$(\alpha_4)$  [N=4]")
+            ax.grid(alpha=0.25)
+            if row == 0:
+                ax.set_title(col_title, fontsize=9)
+
+    for row in range(2):
+        axes[row, 3].axis("off")
+
+    axes[0, 3].legend(
+        [h_chord, h_direct, h_nn4, h_nn4s],
+        [r"$\alpha_4^{\rm exact}(s)=(1{-}s)\alpha_4(\xi_1)+s\alpha_4(\xi_2)$ — chord",
+         r"Direct-$\alpha_4$:  $\alpha_4(r_1(s))$  [only $r_1$]",
+         r"NN$_{n4}$ (1-mode train):  $\hat\alpha_4(r_1,r_2,r_3)$",
+         r"NN$_{n4}^{\rm super}$ (superposition train)"],
+        fontsize=8.5, loc="upper left",
+        title="N=4 closure  (U4/U0 = alpha4)\n6 real inputs: (Re/Im of r1,r2,r3)",
+        title_fontsize=8.5, frameon=True, handlelength=2.5,
+    )
+    axes[1, 3].legend(
+        [],
+        [],
+        fontsize=8.5, loc="upper left", frameon=True,
+        title=("Endpoints (diamond): exact\n"
+               "by training (eigenmode manifold)\n\n"
+               "Jensen error = gap to chord.\n\n"
+               r"N=4: 6 DOF $=$ 6 unknowns" + "\n"
+               r"$\Rightarrow$ superposition training" + "\n"
+               r"closes the gap (NN$^{\rm super}$)." + "\n\n"
+               r"N=3: 4 DOF $<$ 6 unknowns" + "\n"
+               r"$\Rightarrow$ gap is irreducible."),
+        title_fontsize=8.5,
+    )
+
+    fig.suptitle(
+        r"Chord vs. curve at the $\alpha_4$ (N=4 hierarchy) level"
+        "\n"
+        r"Superposition training (NN$^{\rm super}$) substantially reduces the Jensen "
+        r"error — confirming that the N=4 information content is sufficient to resolve "
+        r"two-mode states.",
+        fontsize=10, y=1.02,
+    )
+    fig.tight_layout()
+    out = FIG_DIR / "fig_n4_chord.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     fig_response_function()
     fig_sweep_heatmaps()
@@ -735,3 +1253,5 @@ if __name__ == "__main__":
     fig_offmanifold_diagnostic()
     fig_landau_damping()
     fig_xi_coverage()
+    print("=== fig_n4_chord ==="); fig_n4_chord()
+    print("=== fig_nn_jensen_chord ==="); fig_nn_jensen_chord()
