@@ -91,41 +91,68 @@ The kinetic dispersion at scales much longer than the Debye length is
 \paragraph{Padé closures.} A linear-in-moments closure $U_3 = \sum_{i<3}
 a_i U_i$ with constants $a_i$ combined with the moment recurrence yields a
 degree-$(1,3)$ rational approximant of $Z'(\xib)$. Choosing $(a_i)$ to
-match the Taylor series of $-\sqrt{\pi} Z'$ at $\xib=0$ to order $\xib^N$
-is the Pad\'e closure $R_N$ in the Hammett--Perkins / Hunana hierarchy.
+match the Taylor series of $Z'$ at $\xib=0$ to order $\xib^N$ is the
+Pad\'e closure $R_N$ in the Hammett--Perkins / Hunana hierarchy; the $N=3$
+case used throughout this paper is constructed directly from the HP~1990
+recommended 3-moment response function ($\Gamma=3$, $\mu_1=0$,
+$\chi_1=2/\sqrt{\pi}$) rather than a bare Taylor match at $\xib=0$, which
+removes a spurious unstable fluid eigenmode present in the naive
+Taylor-matched $R_3$ (Section~\ref{sec:itg} gives an independent check of
+this $N=3$ closure against the HP~1990 ITG dispersion relation).
 
 % =====================================================================
 \section{Padé baseline}
+\label{sec:pade-baseline}
 
 Figure~\ref{fig:response} compares the closed fluid response of the Pad\'e
-hierarchy $N \in \{3,4,5,6\}$ to the kinetic $-\sqrt{\pi}\,Z'(\xib)$ along
-real $\xib$. Each Pad\'e closure matches the kinetic curve to
-$\sim 10^{-2N+3}$ at $\xib=0$ (Taylor matching) and degrades rapidly to
-residual of order unity for $|\xib| \gtrsim 1$. The imaginary part (Landau
-resonance) is captured at only $\sim 30\%$ of its kinetic amplitude even
-at $N=6$. This is the fundamental Pad\'e ceiling: a finite-order rational
-approximates an entire function only locally.
+hierarchy $N \in \{3,4,5,6\}$ to the kinetic $Z'(\xib)$ along real $\xib$.
+The $N=3$ member of the hierarchy is built from the HP~1990 recommended
+3-moment response ($\Gamma=3$, $\mu_1=0$, $\chi_1=2/\sqrt{\pi}$) rather
+than a bare Taylor match: it is exact at $\xib=0$ by construction
+($\chi_1$ fixes $Z(0)=i\sqrt{\pi}$) but its residual grows to
+$6.9\times10^{-1}$ (a relative error of $55\%$) by $|\xib|\sim1$, where
+the Landau resonance peaks. $N\geq4$ instead Taylor-match $Z'$ directly at
+$\xib=0$ and converge quickly with order: the residual at $|\xib|\lesssim1$
+drops from $3.6\times10^{-2}$ ($N=4$) to $8.5\times10^{-3}$ ($N=5$) to
+$2.0\times10^{-3}$ ($N=6$), each $\sim4\times$ tighter than the last. The
+$N=3$ residual visible in the figure is specific to the HP construction
+(chosen for its large-$|\xib|$/stability properties, not pointwise
+accuracy); a bare Taylor-matched $R_3$ would have comparable accuracy to
+$R_4$ here but reintroduces a spurious unstable fluid eigenmode that the
+HP construction was designed to remove (Section~\ref{sec:itg}).
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{fig_response_function}
-  \caption{Padé hierarchy vs kinetic $-\sqrt{\pi}\,Z'(\xib)$ along real
-  $\xib$. Real part (left), imaginary part / Landau resonance (middle),
-  pointwise residual on log scale (right). Pad\'e residuals plateau at
-  $\sim 10^0$ for $|\xib|>1$.}
+  \caption{Padé hierarchy vs kinetic $Z'(\xib)$ along real $\xib$. Real
+  part (left), imaginary part / Landau resonance (middle), pointwise
+  residual on log scale (right). $N=3$ (HP-constructed) plateaus at
+  $\sim10^{-1}$ near $|\xib|\sim1$; $N\geq4$ (Taylor-matched) converge to
+  $10^{-3}$--$10^{-2}$ by $N=6$.}
   \label{fig:response}
 \end{figure}
 
 Figure~\ref{fig:overshootN} plots the relative error in the BoT
 $\gamma_{\max}$ at the canonical operating point
-$(\ub/\vb=5, \varepsilon=0.05)$ vs Pad\'e order. The hierarchy oscillates
-around the kinetic answer, crossing zero between $N=7$ and $N=8$.
+$(\ub/\vb=5, \varepsilon=0.05)$ vs Pad\'e order. $N=3$ overshoots by
+$+5.0\%$; $N\geq4$ collapses the overshoot to $\leq0.04\%$ and decreases
+monotonically to $+0.001\%$ by $N=7$ --- no oscillation or sign change.
+Despite this, $N=3$ remains the operating point for the rest of the
+paper: it is the smallest closure with a nontrivial (bilinear) per-mode
+identity (Section~\ref{sec:bilinear}), matches the moment count of the
+$N=2$/$N=4$ comparisons in Sections~\ref{sec:n2} and~\ref{sec:n4}, and is
+the regime where the NN closure's advantage over Pad\'e is largest in
+relative terms; the dispersion-level accuracy of higher-$N$ Pad\'e does
+not by itself fix the off-manifold (Jensen) error analyzed in
+Section~\ref{sec:interp}, which is a property of the closure's
+\emph{functional form}, not its order.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.6\linewidth]{fig_overshoot_vs_N}
   \caption{$\gamma_{\max}$ overshoot at $(\ub/\vb, \varepsilon)=(5, 0.05)$
-  vs Pad\'e order. Non-monotone --- crosses zero near $N=7$.}
+  vs Pad\'e order. $N=3$ (HP-constructed): $+5.0\%$. $N\geq4$
+  (Taylor-matched): $\leq0.04\%$, monotonically decreasing.}
   \label{fig:overshootN}
 \end{figure}
 
@@ -714,6 +741,118 @@ beam) to $+800\%$ (cold sparse beam).
   \label{fig:u2sweep}
 \end{figure}
 
+\subsection{Off-manifold transient: why direct-$\beta$ tolerates any IC and bilinear does not}
+\label{sec:manifold-transient}
+
+Section~\ref{sec:bilinear} showed that the bilinear identity
+$U_3=U_1U_2/U_0$ \eqref{eq:bilinear}, hardcoded as a closure, matches
+kinetic to six decimals on a Langmuir-projected IC but overshoots
+$\gamma_{\rm eff}$ by $+28.4\%$ under a generic $\delta E$ IC at the
+canonical point. We now isolate \emph{why}, using the $N=2$/$N=3$
+state-space contrast of this section: direct-$\beta$ never integrates
+$U_2$ as a dynamical variable --- it is defined algebraically,
+$U_2\equiv U_0\,\beta(U_1/U_0)$, at every evaluation of the right-hand
+side --- whereas bilinear N=3 integrates $U_2$ freely and closes only
+$U_3=U_1U_2/U_0$ one level up. Define the off-manifold distance
+\begin{equation}\label{eq:offmfld-dist}
+  d(t) \;\equiv\; \bigl|\,U_2(t) - U_0(t)\,\beta\bigl(U_1(t)/U_0(t)\bigr)\,\bigr|.
+\end{equation}
+For direct-$\beta$, $d\equiv0$ identically and at every integrator
+tolerance, down to machine precision at $\mathrm{rtol}=10^{-4}$ --- not
+because $\beta$ happens to be accurate, but because the two terms being
+subtracted are the same algebraic expression by construction. For
+bilinear, $d(t)$ is a genuine measure of trajectory error: $U_2$ can,
+and does, drift away from the $\beta$-manifold value, and how far it
+drifts depends entirely on how close the IC starts to a true kinetic
+eigenmode.
+
+Figure~\ref{fig:manifold-transient} compares three IC constructions at
+$(\ub/\vb,\varepsilon)=(4.0,0.02)$, $\gamma_{\rm kin}=0.0893$: (1) a
+generic $\delta E$ IC ($U_n(0)=0$, maximally off-manifold); (2) the
+literal velocity moments of the true kinetic eigenvector, mixed
+$50/50$ with the kinetic eigenvector of a second, Landau-damped mode
+at the same $k$ (``projected kinetic, off-eigenmode''); and (3) the
+closed-form single-eigenmode formulas $U_1/U_0=\xib$,
+$U_2/U_0=\beta(\xib)$, mixed $50/50$ between the same growing and
+damped frequencies (``analytic eigenmode, off-eigenmode''). Row (3) is
+exactly on the single-mode manifold for \emph{either} frequency alone;
+mixing two different complex frequencies makes $\hat\xi\equiv U_1/U_0$
+time-varying rather than constant; once $\hat\xi(t)$ is no longer
+$\xib$ for any single kinetic mode, both rows (2) and (3) are
+off-manifold for a genuine physical reason (mode beating), not merely
+finite-moment truncation.
+
+\begin{table}[H]
+\centering
+\caption{Bilinear N=3 late-time growth-rate overshoot vs.\ $\gamma_{\rm
+kin}=0.0893$, by IC construction. Direct-$\beta$ is exact (0.00\%,
+$d\equiv0$) in every row.}
+\label{tab:manifold-transient}
+\begin{tabular}{lr}
+\toprule
+IC construction & Bilinear $N{=}3$ overshoot \\
+\midrule
+Generic $\delta E$ (Row 1) & $+80\%$ \\
+Projected kinetic, off-eigenmode mix (Row 2) & $-4\%$ \\
+Analytic eigenmode, off-eigenmode mix (Row 3) & $+245\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_manifold_transient}
+  \caption{Kinetic vs.\ bilinear $N{=}3$ vs.\ direct-$\beta$ $N{=}2$ at
+  $(\ub/\vb,\varepsilon)=(4.0,0.02)$ under the three IC constructions of
+  Table~\ref{tab:manifold-transient} (rows). Columns: (A) $|E(t)|$; (B)
+  off-manifold distance $d(t)$ \eqref{eq:offmfld-dist}; (C)
+  instantaneous growth rate $d\log|E|/dt$. Direct-$\beta$ (blue) sits at
+  $d\equiv0$ and tracks $\gamma_{\rm kin}$ from $t=0$ in every row;
+  bilinear (orange) drifts off-manifold at a rate and to a degree set by
+  how far the IC starts from a true single-mode eigenvector.}
+  \label{fig:manifold-transient}
+\end{figure}
+
+The key result is that bilinear's transient is not bounded by how
+``close'' an IC looks to an eigenmode in amplitude --- it is bounded by
+how much amplitude sits in the modes of the \emph{bilinear fluid
+system itself} that are not $\gamma_{\rm kin}$. Once excited, even at
+a vanishingly small initial amplitude, that spurious mode eventually
+dominates: in Row 1, $d(t)$ grows at a local rate that falls from
+$\sim\!1.7$ (the system bootstrapping from $U_n(0)=0$) down to a
+constant $0.161$ by $t\gtrsim20$ --- bilinear's own dominant unstable
+eigenvalue, not $\gamma_{\rm kin}=0.0893$, which is exactly the source
+of the $+80\%$ overshoot. In Row 2, the projected-kinetic IC is so
+closely aligned with the physical mode that $d(t)$ grows at a
+\emph{constant} rate equal to $\gamma_{\rm kin}$ for the entire
+$t\in[0,80]$ window plotted --- the same spurious mode is present, but
+its initial amplitude is so small that the crossover to its dominance
+is pushed well past $t=80$. Row 3 shows the opposite extreme: building
+the IC from the bare 3-moment formulas, rather than projecting the
+literal (infinite-moment) kinetic eigenvector, puts enough amplitude
+into the spurious mode that bilinear locks onto a growth rate of
+$0.308$ --- $3.5\times$ faster than $\gamma_{\rm kin}$ --- well before
+$t=80$. This sharpens the point of Section~\ref{sec:bilinear}: the
+bilinear identity is exact \emph{pointwise} on any single eigenmode,
+but mixing even two exact eigenmodes is enough to expose a closure
+instability with no analogue in direct-$\beta$, where there is no
+extra state variable to mistrack in the first place.
+
+\paragraph{Numerical note.} Evaluating the off-eigenmode mixtures of
+Row 2/3 for direct-$\beta$ and the NN closures requires a numerical
+safeguard absent from the original $N{=}2$/$N{=}3$ solvers. Superposing
+two modes of different complex frequency makes $U_0(t)$ pass through a
+near-zero node from destructive interference; at that instant
+$\hat\xi=U_1/U_0$ diverges, and since $Z'(\xi)$ grows like
+$e^{\mathrm{Im}(\xi)^2}$ for $\mathrm{Im}(\xi)\to-\infty$, it overflows
+within a handful of adaptive-step evaluations, collapsing the RK45
+step size. Clipping $|\hat\xi|$ to $12$ (comfortably above any
+physically relevant $|\xib|\lesssim8$ used elsewhere in this paper,
+comfortably below where $Z'$ approaches double-precision overflow)
+before evaluating any $Z'$-based closure resolves this without
+affecting on-manifold accuracy, which we verified is unchanged to
+$2.4\times10^{-7}$ relative error on a pure eigenmode.
+
 % =====================================================================
 \section{Generalization: Landau damping on a single warm Maxwellian}
 \label{sec:landau}
@@ -1015,6 +1154,134 @@ alone.  In time-domain integration it develops a spurious exponentially growing
 mode at $t\approx 40$, a pathology absent in the exact kinetic system that the
 per-mode formula does not suppress.  The $N=4$ NN closure, whose off-manifold
 behavior is constrained by training data, remains stable past $t=80$.
+
+% =====================================================================
+\section{Independent validation: slab ITG dispersion}
+\label{sec:itg}
+
+Every result so far is internal to the bump-on-tail system. As an
+independent check, we apply the same closures to a second linear
+instability in a different geometry: the slab ion-temperature-gradient
+(ITG) mode at zero finite-Larmor-radius (FLR), whose kinetic dispersion
+relation and fluid-closure comparison are worked out in
+Hammett \& Perkins, \emph{Phys.\ Rev.\ Lett.}\ \textbf{64}, 3019 (1990)
+[HP1990], Eq.~12. This is a genuinely different test: a single warm ion
+Maxwellian against an adiabatic electron response, with the free
+parameters $\eta_i=L_n/L_T$ (density/temperature gradient ratio) and
+$\zeta_*=\omega_*/(|k_\parallel|v_{ti}\sqrt2)$ (normalized diamagnetic
+drift frequency) replacing $(\ub/\vb,\varepsilon)$. Frequencies are
+normalized as $\zeta=\omega/(|k_\parallel|v_{ti}\sqrt2)$, and the
+dispersion relation is
+\begin{equation}\label{eq:Dslab}
+  D(\zeta) = 1-\eta_i\zeta_* +
+  \bigl[\zeta - \zeta_*\bigl(1-\tfrac{\eta_i}{2}+\eta_i\zeta^2\bigr)\bigr]
+  \,Z(\zeta) + \tau = 0,
+\end{equation}
+with $\tau=T_{i0}/T_{e0}$. Equation~\eqref{eq:Dslab} is evaluated with
+eight different substitutions for the ion susceptibility $Z(\zeta)$:
+exact kinetic; HP's recommended 3-moment closure ($\Gamma=3$, $\mu_1=0$,
+$\chi_1=2/\sqrt{\pi}$, identical to the $N{=}3$ Pad\'e closure used
+throughout this paper); a Braginskii-like variant ($\Gamma=5/3$,
+$\mu_1=0$); the bare Taylor-matched Pad\'e $N{=}3$ of
+Section~\ref{sec:pade-baseline}; the exact $N{=}2$/$N{=}3$ per-mode
+formulas $\beta,\alpha$ of Sections~\ref{sec:bilinear}
+and~\ref{sec:n2}; and the two trained NN closures of
+Sections~\ref{sec:results} and~\ref{sec:n4}. Each $Z(\zeta)$ is obtained
+from the corresponding closure's $U_0(\zeta)$ via $Z=(-U_0/2-1)/\zeta$
+(the inverse of \eqref{eq:U0} and $Z'=-2(1+\zeta Z)$).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{fig_itg_threshold}
+  \caption{Slab ITG dispersion at $\zeta_*=1$, $\tau=1$. Left: growth
+  rate $\mathrm{Im}(\zeta)$ vs.\ $\eta_i$, maximum over both branches
+  (drift-wave, $\mathrm{Re}(\zeta)<0$, dominant for $\eta_i<2$; ITG,
+  $\mathrm{Re}(\zeta)>0$, dominant for $\eta_i>2$). Right: real
+  frequency of the most-unstable root. All eight closures cross
+  $\mathrm{Im}(\zeta)=0$ at exactly $\eta_i=2$; HP and BoT Pad\'e
+  $N{=}3$ are identical curves; both NN closures track kinetic within
+  $\sim\!1\%$ everywhere shown.}
+  \label{fig:itg}
+\end{figure}
+
+\paragraph{Threshold.} HP1990 report that their recommended values
+($\Gamma=3$, $\mu_1=0$, $\chi_1=2/\sqrt{\pi}$) reproduce the exact
+kinetic marginal-stability threshold $\eta_{\rm th}=2$, and that
+$\mu_1\neq0$ models do not. We confirm this numerically to 8 decimal
+places: every closure in Figure~\ref{fig:itg} --- not only HP, but also
+Brag-$\Gamma$, Pad\'e $N{=}3$, both exact per-mode formulas, and both
+NN closures, all of which share $\mu_1=0$ --- crosses
+$\mathrm{Im}(\zeta)=0$ at $\eta_i=2.00000000$. This isolates the role
+of $\mu_1$ precisely: at $\zeta\to0$ the threshold condition is
+$\mu_1$-dependent but \emph{independent of $\Gamma$}, so Brag-$\Gamma$
+gets the threshold exactly right despite using the ``wrong''
+($5/3$ vs.\ $3$) value of $\Gamma$. What $\Gamma=5/3$ instead degrades
+is the growth-rate \emph{slope} away from threshold: at $\eta_i=2.05$
+(just above threshold) Brag's slope is $\sim\!3\times$ steeper than
+HP's, and by $\eta_i=5$ HP overshoots kinetic by $+14.6\%$ while
+Brag-$\Gamma$ overshoots by $+7.7\%$ in the opposite direction of its
+near-threshold bias --- both far inside the $\lesssim\!1\%$ band of the
+two NN closures (Table~\ref{tab:itg}).
+
+\begin{table}[H]
+\centering
+\caption{Growth rate $\mathrm{Im}(\zeta)$ at $\eta_i=5$, $\zeta_*=1$,
+$\tau=1$ (cf.\ Figure~\ref{fig:itg}); relative error vs.\ kinetic in
+parentheses.}
+\label{tab:itg}
+\begin{tabular}{lr}
+\toprule
+Closure & $\mathrm{Im}(\zeta)$ (rel.\ err.) \\
+\midrule
+Kinetic (exact)         & $0.1941$ \\
+HP 3-moment ($\Gamma=3$) & $0.2225$ $(+14.6\%)$ \\
+Brag-$\Gamma$ ($\Gamma=5/3$) & $0.2091$ $(+7.7\%)$ \\
+BoT Pad\'e $N{=}3$      & $0.2225$ $(+14.6\%)$ \\
+$N{=}2$/$N{=}3$ exact    & $0.1941$ $(0.0\%)$ \\
+BoT $N{=}2$ NN          & $0.1929$ $(-0.6\%)$ \\
+BoT $N{=}4$ NN          & $0.1941$ $(0.0\%)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Consistency with the $N=3$ fix.} BoT Pad\'e $N{=}3$ and HP's
+3-moment closure are visually and numerically identical curves in
+Figure~\ref{fig:itg} (agreeing to the digits shown in
+Table~\ref{tab:itg}), which is the expected consequence of
+Section~\ref{sec:pade-baseline}: our $N{=}3$ closure \emph{is} the HP
+construction, not a Taylor match. Locating this ITG comparison surfaced
+two implementation bugs, both now fixed. First, the conversion from
+Pad\'e $U_0$ to $Z(\zeta)$ still assumed the pre-fix $U_0\approx
+-\sqrt\pi Z'(\xib)$ normalization (Section~\ref{sec:pade-baseline}),
+giving a badly wrong, visibly non-smooth Pad\'e curve until corrected
+to the $Z=(-U_0/2-1)/\zeta$ identity used throughout. Second, the root
+tracker for the two NN closures rejected converged Newton roots at
+residual $1.3\times10^{-8}$ against an overly tight
+$10^{-8}$ acceptance threshold, silently falling back to a coarse grid
+search that sometimes found nothing and defaulted to $\mathrm{Im}
+(\zeta){=}0$; this produced spurious sawtooth dips in the NN curves
+that disappeared once the tolerance was relaxed to $10^{-6}$ and
+continuity-seeded from the previous $\eta_i$'s root.
+
+\paragraph{Open item.} HP1990 additionally derive a closed-form
+growth-rate formula valid in the asymptotic limit $\zeta_{*i}\gg1$,
+$\zeta\ll1$ (their unnumbered near-threshold equation), predicting a
+universal threshold $\eta_{\rm th}=\Gamma-1+2\chi_1\mu_1$ independent
+of $\zeta_*$. This is a different limit from $\zeta_*=1$ used in
+Figure~\ref{fig:itg} above (where the threshold instead follows the
+exact, $\Gamma$-independent relation $\eta_{\rm th}=(1+\tau)/\zeta_*$,
+which happens to equal $2$ at $\zeta_*=\tau=1$ as well). We attempted a
+companion check of this asymptotic formula at $\zeta_*\gg1$ by tracking
+the corresponding root via Newton continuation from $\zeta_*=1$,
+via direct grid search at $\zeta_*\in\{10,20,50,100\}$, and by seeding
+Newton directly from the formula's own predicted root; none reliably
+isolated a stable, $\eta_i$-dependent small-$\zeta$ branch matching
+HP1990's description once $\zeta_*\gtrsim2$. We report this as an open
+item rather than a validated result: either our $\zeta_*$ normalization
+in \eqref{eq:Dslab} does not match HP1990's convention exactly outside
+the $\zeta_*=1$ case checked above, or the asymptotic branch requires a
+more careful leading-order derivation to seed correctly than the
+numerical search attempted here.
 
 % =====================================================================
 \section{Discussion}
