@@ -157,6 +157,34 @@ def sim_evolve(k: float, u_b: float, eps: float, model,
     return naive_evolve(k, u_b, eps, model, t_grid, y0, rtol, atol)
 
 
+# ----- safeguard for Z'-based closures (beta, alpha, NN-of-xi) ------------
+# Off the single-eigenmode manifold, U_0(t) can pass through a near-zero
+# "node" from destructive interference between superposed modes with
+# different complex frequencies (e.g. two-mode mixing ICs).  At that node
+# U_1/U_0 races to large |Im|, where Z'(xi) grows like exp(Im(xi)^2) and
+# overflows within a handful of RK45 steps, collapsing the adaptive step
+# size ("Required step size is less than spacing between numbers").  The
+# closure value itself stays finite (beta(xi) -> xi^2 as Z'(xi) -> inf), but
+# the speed at which xi sweeps through huge values makes the ODE locally
+# stiff.  Clipping |xi_hat| bounds this without affecting normal eigenmode
+# dynamics (|xi_b| is O(1) for every physically relevant case in this repo).
+
+_XI_RATIO_MAX = 12.0
+
+
+def _safe_xi_ratio(U1: complex, U0: complex, U0_floor: float = 1e-15,
+                    max_mag: float = _XI_RATIO_MAX) -> complex:
+    """Return U_1/U_0, clipped in magnitude to avoid feeding a Z'-based
+    closure an argument that blows up near a U_0 node."""
+    if abs(U0) < U0_floor:
+        return 0.0 + 0.0j
+    xi = U1 / U0
+    mag = abs(xi)
+    if mag > max_mag:
+        xi = xi * (max_mag / mag)
+    return xi
+
+
 # ----- DIRECT ALPHA closure (analytic, zero-parameter) --------------------
 # Apply the exact per-mode formula alpha(xi) = xi^3 - xi/Z'(xi) at xi=U1/U0.
 # This uses only r_1 = U1/U0 (ignoring U2 as a closure input), exactly as the
@@ -167,10 +195,7 @@ def sim_evolve(k: float, u_b: float, eps: float, model,
 def _direct_alpha_rhs(t, y_real, k: float, u_b: float, eps: float):
     y = y_real[:5] + 1j * y_real[5:]
     u, E, U0, U1, U2 = y
-    if abs(U0) < 1e-15:
-        U3 = 0.0 + 0.0j
-    else:
-        U3 = U0 * alpha(U1 / U0)   # only r1; no r2 used
+    U3 = U0 * alpha(_safe_xi_ratio(U1, U0))   # only r1; no r2 used
     du  = -E
     dE  = u - eps * (u_b * U0 + U1)
     dU0 = -1j * k * u_b * U0 - 1j * k * U1
@@ -353,10 +378,7 @@ def _direct_u2_rhs(t, y_real, k: float, u_b: float, eps: float):
     """
     y = y_real[:4] + 1j * y_real[4:]
     u, E, U0, U1 = y
-    if abs(U0) < 1e-15:
-        U2 = 0.0 + 0.0j
-    else:
-        U2 = U0 * _u2_beta(U1 / U0)
+    U2 = U0 * _u2_beta(_safe_xi_ratio(U1, U0))
     du  = -E
     dE  = u - eps * (u_b * U0 + U1)
     dU0 = -1j * k * u_b * U0 - 1j * k * U1
@@ -392,11 +414,8 @@ def _nn_u2_rhs(t, y_real, k: float, u_b: float, eps: float, model):
     """RHS for N=2 fluid system with NN beta(U_1/U_0) closure."""
     y = y_real[:4] + 1j * y_real[4:]
     u, E, U0, U1 = y
-    if abs(U0) < 1e-15:
-        U2 = 0.0 + 0.0j
-    else:
-        r1 = U1 / U0
-        U2 = U0 * complex(_u2_model_beta(model, r1))
+    r1 = _safe_xi_ratio(U1, U0)
+    U2 = U0 * complex(_u2_model_beta(model, r1))
     du  = -E
     dE  = u - eps * (u_b * U0 + U1)
     dU0 = -1j * k * u_b * U0 - 1j * k * U1
@@ -675,13 +694,10 @@ def _nn_n4_rhs(t, y_real, k: float, u_b: float, eps: float, model):
     from bot.closures.n4_nn import n4_predict_alpha4
     y = y_real[:6] + 1j * y_real[6:]
     u, E, U0, U1, U2, U3 = y
-    if abs(U0) < 1e-15:
-        U4 = 0.0 + 0.0j
-    else:
-        r1 = U1 / U0
-        r2 = U2 / U0
-        r3 = U3 / U0
-        U4 = U0 * complex(n4_predict_alpha4(model, r1, r2, r3))
+    r1 = _safe_xi_ratio(U1, U0)
+    r2 = _safe_xi_ratio(U2, U0)
+    r3 = _safe_xi_ratio(U3, U0)
+    U4 = U0 * complex(n4_predict_alpha4(model, r1, r2, r3))
     du  = -E
     dE  = u - eps * (u_b * U0 + U1)
     dU0 = -1j * k * u_b * U0 - 1j * k * U1
