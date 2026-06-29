@@ -20,7 +20,7 @@ import jax
 
 from bot.closed_loop import (
     direct_u2_evolve, kinetic_evolve, pade_u2_evolve,
-    langmuir_ic_kinetic, kinetic_ic_to_fluid_u2,
+    langmuir_ic_kinetic, kinetic_ic_to_fluid, kinetic_ic_to_fluid_u2,
     kinetic_eigenmode_ic, fluid_eigenmode_ic_u2, fluid_eigenmode_ic_u3,
     direct_alpha_evolve, naive_evolve,
 )
@@ -1215,6 +1215,535 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
 
 
 # ---------------------------------------------------------------------------
+# Figure: HP vs Direct β sweep heatmap
+# ---------------------------------------------------------------------------
+
+def fig_hp_beta_sweep(path: Path = RUN_DIR / "sweep_hp_beta.npz") -> None:
+    """Log10|γ_eff/γ_kin − 1| heatmaps: HP Padé N=3 vs Direct β (N=2)."""
+    d = np.load(path)
+    u_b = d["u_b_vals"]; eps = d["eps_vals"]
+    over_hp  = d["overshoot_hp"]
+    over_dir = d["overshoot_direct"]
+    extent = [eps[0], eps[-1], u_b[0], u_b[-1]]
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+    _log_heatmap(axes[0], over_hp,  extent, r"HP Padé $N=3$  (Hammett-Perkins)")
+    im = _log_heatmap(axes[1], over_dir, extent, r"Direct $\beta$ closure  ($N=2$)")
+    fig.suptitle(
+        r"$\gamma_{\rm eff}$ relative error vs kinetic  (generic $\delta E$ IC)",
+        fontsize=13, y=1.02,
+    )
+    fig.tight_layout()
+    _add_colorbar(fig, im)
+    out = FIG_DIR / "fig_hp_beta_sweep.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: Two-mode mixing sweep heatmap
+# ---------------------------------------------------------------------------
+
+def fig_twomode_sweep(path: Path = RUN_DIR / "sweep_twomode.npz") -> None:
+    """Log10(rel RMSE of E(t)) heatmaps for two-mode mixing IC sweep.
+
+    x-axis: mixing weight w ∈ [0, 1]  (w=0: pure mode 1; w=1: pure mode 2)
+    y-axis: ε = n_b/n_0
+    3 panels: Direct β (N=2), N=4 NN super, HP Padé N=3.
+    Error metric: ||E_fluid − E_ref||_2 / ||E_ref||_2
+    """
+    d = np.load(path)
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+
+    _panel(axes[0], d["err_dir"], r"Direct $\beta$  ($N=2$)")
+    _panel(axes[1], d["err_nn"],  r"N=4 NN$^{\rm super}$  ($r_1,r_2,r_3$)")
+    im = _panel(axes[2], d["err_hp"],  r"HP Padé $N=3$")
+
+    fig.suptitle(
+        r"Two-mode IC: $\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$  "
+        r"($u_b=1.0,\;k=0.5$;  IC$\,=\,(1{-}w)\cdot$mode$_1 + w\cdot$mode$_2$)",
+        fontsize=11, y=1.02,
+    )
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: Two-mode mixing sweep — GROWING regime
+# ---------------------------------------------------------------------------
+
+def fig_twomode_sweep_growing(path: Path = RUN_DIR / "sweep_twomode_growing.npz") -> None:
+    """Log10(rel RMSE of E(t)) heatmaps for two-mode mixing sweep in growing regime.
+
+    u_b=5.0, k=0.30: mode 1 is the growing beam mode, mode 2 is the damped
+    upper branch.  w=0 is pure growing; w=1 is pure damped.
+    """
+    d = np.load(path)
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+
+    _panel(axes[0], d["err_dir"], r"Direct $\beta$  ($N=2$)")
+    _panel(axes[1], d["err_nn"],  r"N=4 NN$^{\rm super}$  ($r_1,r_2,r_3$)")
+    im = _panel(axes[2], d["err_hp"],  r"HP Padé $N=3$")
+
+    axes[0].text(0.02, 0.97, "growing", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+    axes[0].text(0.78, 0.97, "damped", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+
+    fig.suptitle(
+        r"Two-mode IC (growing regime): $\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$  "
+        r"($u_b=5.0,\;k=0.3$;  $w{=}0$: growing beam,  $w{=}1$: damped upper branch)",
+        fontsize=10, y=1.02,
+    )
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep_growing.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: Two-mode sweeps — NN and HP Padé only (no Direct β)
+# ---------------------------------------------------------------------------
+
+def fig_twomode_sweep_nn_hp(path: Path = RUN_DIR / "sweep_twomode.npz") -> None:
+    """Two-panel version of fig_twomode_sweep: NN and HP Padé only."""
+    d = np.load(path)
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+    _panel(axes[0], d["err_nn"],  r"NN$(r_1,r_2,r_3)$")
+    im = _panel(axes[1], d["err_hp"],  r"HP Padé $N=3$")
+
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep_nn_hp.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+def fig_twomode_sweep_growing_nn_hp(path: Path = RUN_DIR / "sweep_twomode_growing.npz") -> None:
+    """Two-panel version of fig_twomode_sweep_growing: NN and HP Padé only."""
+    d = np.load(path)
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+    _panel(axes[0], d["err_nn"],  r"NN$(r_1,r_2,r_3)$")
+    im = _panel(axes[1], d["err_hp"],  r"HP Padé $N=3$")
+
+    axes[0].text(0.02, 0.97, "growing", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+    axes[0].text(0.78, 0.97, "damped", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep_growing_nn_hp.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: Single-mode eigenmode IC sweep over u_b × eps
+# ---------------------------------------------------------------------------
+
+def fig_singlemode_sweep(path: Path = RUN_DIR / "sweep_singlemode.npz") -> None:
+    """Log10(rel RMSE of E(t)) heatmaps for the single-mode eigenmode IC sweep.
+
+    x-axis: u_b (beam velocity)
+    y-axis: ε = n_b/n_0
+    3 panels: Direct β (N=2), N=4 NN super, HP Padé N=3.
+    IC is the fluid eigenmode for the most-unstable kinetic mode at k*(u_b, eps).
+    Reference: analytic  E_ref(t) = amp * exp(-i*omega*t).
+    """
+    d = np.load(path)
+    u_b_vals = d["u_b_vals"]
+    eps_vals = d["eps_vals"]
+
+    extent = [u_b_vals[0], u_b_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z.T, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"$u_b$  (beam velocity)")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+    _panel(axes[0], d["err_dir"], r"Direct $\beta$  ($N=2$)")
+    _panel(axes[1], d["err_nn"],  r"N=4 NN$^{\rm super}$  ($r_1,r_2,r_3$)")
+    im = _panel(axes[2], d["err_hp"],  r"HP Padé $N=3$")
+
+    fig.suptitle(
+        r"Single-mode IC: $\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$  "
+        r"(eigenmode IC at $k^*(u_b,\varepsilon)$;  "
+        r"$E_{\rm ref}(t)=\mathrm{amp}\,e^{-i\omega t}$)",
+        fontsize=10, y=1.02,
+    )
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,\|E_{\rm fluid} - E_{\rm ref}\|/\|E_{\rm ref}\|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_singlemode_sweep.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: HP Padé N=3 time series sweep over |ξ_b|
+# ---------------------------------------------------------------------------
+
+def fig_pade_xib_sweep(
+    cases: list[tuple] | None = None,
+    t_end: float | None = None,
+    amp: float = 1e-3,
+) -> None:
+    """9-panel time series: kinetic vs HP Padé N=3 across a range of |ξ_b|.
+
+    Each panel uses the kinetic eigenmode as initial condition and plots |E(t)|
+    on a log scale.  γ_HP/γ_kin is shown in the subtitle so the reader can see
+    how the growth-rate accuracy varies with |ξ_b|.
+
+    Default cases span |ξ_b| ≈ 0.17 → 2.5, all beam-plasma unstable modes.
+    """
+    from scipy.stats import linregress
+    from bot.closed_loop import pade_evolve, kinetic_evolve, fluid_eigenmode_ic_u3
+    from bot.kinetic import most_unstable_kinetic
+
+    if cases is None:
+        cases = [
+            (3.0, 0.2, 0.05),
+            (3.0, 0.3, 0.05),
+            (4.0, 0.2, 0.05),
+            (3.5, 0.4, 0.05),
+            (5.0, 0.2, 0.05),
+            (5.0, 0.3, 0.05),
+            (6.0, 0.2, 0.05),
+            (7.0, 0.2, 0.05),
+            (8.0, 0.2, 0.05),
+        ]
+
+    a_hp = pade_coefficients(3)
+
+    def _kinetic_eigenmode_ic(k, u_b, eps, omega, N_v=96, V=6.0):
+        s, ds = s_grid(N_v, V)
+        xi = (omega - k * u_b) / k
+        F = (2 * s / SQRT_PI) * np.exp(-s ** 2) / (k * (s - xi)) * amp
+        y0 = np.zeros(2 + N_v, dtype=complex)
+        y0[1] = amp
+        y0[2:] = F
+        return y0
+
+    def _fit_gamma(t, E):
+        t_min = t[-1] * 0.4
+        mask = t >= t_min
+        logE = np.log(np.maximum(np.abs(E[mask]), 1e-30))
+        slope, *_ = linregress(t[mask], logE)
+        return float(slope)
+
+    fig, axes = plt.subplots(3, 3, figsize=(13, 10))
+    for ax, (u_b, k, eps) in zip(axes.flat, cases):
+        omega = most_unstable_kinetic(k, u_b, eps)
+        xib = (omega - k * u_b) / k
+
+        t_stop = t_end if t_end is not None else min(80.0, 4.0 / max(omega.imag, 0.01))
+        t_grid = np.linspace(0, t_stop, 601)
+
+        ic_u3  = fluid_eigenmode_ic_u3(k, u_b, omega, amp)
+        ic_kin = _kinetic_eigenmode_ic(k, u_b, eps, omega)
+
+        E_hp  = pade_evolve(k, u_b, eps, a_hp, t_grid, ic_u3)
+        E_kin = kinetic_evolve(k, u_b, eps, t_grid, ic_kin)
+
+        g_kin = _fit_gamma(t_grid, E_kin)
+        g_hp  = _fit_gamma(t_grid, E_hp)
+        ratio = g_hp / g_kin if abs(g_kin) > 1e-6 else np.nan
+
+        ax.semilogy(t_grid, np.abs(E_kin), "k-",  lw=1.5, label=f"kinetic  γ={g_kin:.4f}")
+        ax.semilogy(t_grid, np.abs(E_hp),  "C1--", lw=1.5, label=f"HP N=3  γ={g_hp:.4f}")
+        ax.set_title(
+            f"$u_b={u_b}$, $k={k}$, $\\varepsilon={eps}$  $|\\xi_b|={abs(xib):.2f}$\n"
+            f"$\\gamma_{{\\rm HP}}/\\gamma_{{\\rm kin}} = {ratio:.3f}$",
+            fontsize=8,
+        )
+        ax.set_xlabel("$t$", fontsize=8)
+        ax.set_ylabel("$|E|$", fontsize=8)
+        ax.legend(fontsize=6.5)
+        ax.tick_params(labelsize=7)
+
+    fig.suptitle(
+        r"HP Padé $N=3$ vs kinetic — eigenmode IC, varying $|\xi_b|$",
+        fontsize=11,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    out = FIG_DIR / "fig_pade_xib_sweep.png"
+    fig.savefig(out, dpi=150)
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: N=3 bilinear vs N=2 Direct beta vs kinetic, generic dE IC
+# ---------------------------------------------------------------------------
+
+def fig_manifold_transient(u_b: float = 4.0, eps: float = 0.02,
+                            t_end: float = 80.0, n_t: int = 801,
+                            amp: float = 1e-3, w_mix: float = 0.5) -> None:
+    """Compare kinetic vs N=3 bilinear vs N=2 Direct beta under three ICs.
+
+    Direct beta enforces U_2 = U_0 beta(U_1/U_0) algebraically at every
+    instant, so it is exact on the kinetic growth rate from t=0 regardless
+    of IC. Bilinear N=3 instead evolves U_2 as a free dynamical variable
+    (closing only U_3 = U_1 U_2 / U_0); how far U_2 starts from the
+    beta-manifold value depends on the IC:
+
+      Row 1 — Generic dE IC (u=U_n=0, E=amp): U_2 starts at 0, maximally
+        off-manifold -> large overshoot before settling onto gamma_kin.
+      Row 2 — Projected kinetic IC, off-eigenmode: U_n = velocity moments
+        of a MIXED kinetic state (1-w_mix)*eigenvector(omega1, growing) +
+        w_mix*eigenvector(omega2, damped) at the same k.  This is off the
+        single-eigenmode manifold for a genuine physical reason (mode
+        beating), not just finite-moment truncation.
+      Row 3 — Analytic fluid eigenmode IC, off-eigenmode: same mixing
+        weight applied to the closed-form single-eigenmode formulas,
+        (1-w_mix)*ic(omega1) + w_mix*ic(omega2).  Exactly on the
+        single-mode manifold for EITHER omega1 or omega2 alone, but the
+        mix is not, since xi_hat = U_1/U_0 is not constant once two
+        different complex frequencies beat against each other.
+
+    Columns: (A) |E(t)|, (B) off-manifold distance |U_2-beta(xi_b)U_0|,
+    (C) instantaneous growth rate d/dt log|E(t)|.
+    """
+    from scipy.integrate import solve_ivp
+    from scipy.stats import linregress
+    from bot.closed_loop import _bilinear_rhs, _direct_u2_rhs
+    from bot.sweep import kinetic_peak
+    from bot.sweeps.sweep_twomode_growing import _find_two_modes
+
+    ks, ws_kin, i_max = kinetic_peak(u_b, eps)
+    k = ks[i_max]
+
+    # actual kinetic eigenvector + its omega (single-mode reference, row 1)
+    y0_kin_eig, omega_eig = langmuir_ic_kinetic(k, u_b, eps, amp=amp)
+    g_kin = omega_eig.imag
+
+    # growing + damped pair at the same k, for the off-eigenmode rows 2 & 3
+    omega1, omega2 = _find_two_modes(k, u_b, eps)  # omega1 == omega_eig
+
+    t_grid = np.linspace(0.0, t_end, n_t)
+
+    def run_bilinear(y0_bil):
+        y0r = np.concatenate([y0_bil.real, y0_bil.imag])
+        sol = solve_ivp(_bilinear_rhs, (t_grid[0], t_grid[-1]), y0r,
+                         t_eval=t_grid, args=(k, u_b, eps),
+                         method="RK45", rtol=1e-8, atol=1e-10)
+        y = sol.y[:5] + 1j * sol.y[5:]
+        return y[1], y[2], y[3], y[4]   # E, U0, U1, U2
+
+    def run_direct(y0_dir):
+        y0r = np.concatenate([y0_dir.real, y0_dir.imag])
+        sol = solve_ivp(_direct_u2_rhs, (t_grid[0], t_grid[-1]), y0r,
+                         t_eval=t_grid, args=(k, u_b, eps),
+                         method="RK45", rtol=1e-8, atol=1e-10)
+        y = sol.y[:4] + 1j * sol.y[4:]
+        E, U0, U1 = y[1], y[2], y[3]
+        U2 = U0 * u2_beta(U1 / U0)
+        return E, U0, U1, U2
+
+    def inst_gamma(E):
+        return np.gradient(np.log(np.maximum(np.abs(E), 1e-300)), t_grid)
+
+    def off_manifold(U0, U1, U2):
+        with np.errstate(invalid="ignore", divide="ignore"):
+            d = np.abs(U2 - U0 * u2_beta(U1 / U0))
+        d[0] = np.nan
+        return d
+
+    # ---- three IC strategies -------------------------------------------
+    y0_kin_generic = np.zeros(2 + 96, dtype=complex)
+    y0_kin_generic[1] = amp
+    y0_bil_generic = np.array([0.0, amp, 0.0, 0.0, 0.0], dtype=complex)
+    y0_dir_generic = np.array([0.0, amp, 0.0, 0.0], dtype=complex)
+
+    # off-eigenmode mix: (1-w_mix)*growing-mode + w_mix*damped-mode
+    y0_kin1 = kinetic_eigenmode_ic(k, u_b, eps, omega1, amp)
+    y0_kin2 = kinetic_eigenmode_ic(k, u_b, eps, omega2, amp)
+    y0_kin_mix = (1.0 - w_mix) * y0_kin1 + w_mix * y0_kin2
+
+    y0_bil_proj = kinetic_ic_to_fluid(y0_kin_mix, k, u_b)
+    y0_dir_proj = y0_bil_proj[:4]
+
+    y0_bil_eigm = ((1.0 - w_mix) * fluid_eigenmode_ic_u3(k, u_b, omega1, amp) +
+                   w_mix * fluid_eigenmode_ic_u3(k, u_b, omega2, amp))
+    y0_dir_eigm = ((1.0 - w_mix) * fluid_eigenmode_ic_u2(k, u_b, omega1, amp) +
+                   w_mix * fluid_eigenmode_ic_u2(k, u_b, omega2, amp))
+
+    rows = [
+        ("Generic " r"$\delta E$ IC", y0_kin_generic, y0_bil_generic, y0_dir_generic),
+        ("Projected kinetic IC\n(off-eigenmode)", y0_kin_mix, y0_bil_proj, y0_dir_proj),
+        ("Analytic eigenmode IC\n(off-eigenmode)", y0_kin_mix, y0_bil_eigm, y0_dir_eigm),
+    ]
+
+    fig, axes = plt.subplots(3, 3, figsize=(15, 12.5))
+    nh = 3 * n_t // 4
+
+    for row, (row_label, y0_kin, y0_bil, y0_dir) in enumerate(rows):
+        E_kin = kinetic_evolve(k, u_b, eps, t_grid, y0_kin)
+        E_bil, U0_bil, U1_bil, U2_bil = run_bilinear(y0_bil)
+        E_dir, U0_dir, U1_dir, U2_dir = run_direct(y0_dir)
+
+        dist_bil = off_manifold(U0_bil, U1_bil, U2_bil)
+        dist_dir = off_manifold(U0_dir, U1_dir, U2_dir)
+
+        gam_kin = inst_gamma(E_kin)
+        gam_bil = inst_gamma(E_bil)
+        gam_dir = inst_gamma(E_dir)
+
+        g_bil_fit = linregress(t_grid[nh:], np.log(np.abs(E_bil[nh:]))).slope
+        overshoot_pct = (g_bil_fit - g_kin) / g_kin * 100.0
+
+        ax = axes[row, 0]
+        ax.semilogy(t_grid, np.abs(E_kin), "k-", lw=2.0, label="Kinetic")
+        ax.semilogy(t_grid, np.abs(E_bil), "--", color="C1", lw=1.5, label="Bilinear N=3")
+        ax.semilogy(t_grid, np.abs(E_dir), "--", color="C0", lw=1.5, label="Direct β N=2")
+        ax.set_xlabel(r"$t$"); ax.set_ylabel(f"{row_label}\n" + r"$|E(t)|$", fontsize=9)
+        title = f"Bilinear overshoot ~{overshoot_pct:.0f}%"
+        if row == 0:
+            title = "(A)  $|E(t)|$\n" + title
+        ax.set_title(title, fontsize=9)
+        ax.text(0.03, 0.92, rf"$\gamma_{{\rm kin}}={g_kin:.3f}$",
+                transform=ax.transAxes, fontsize=9, va="top")
+        ax.legend(fontsize=7, loc="lower right")
+        ax.grid(alpha=0.3, which="both")
+
+        ax = axes[row, 1]
+        ax.semilogy(t_grid, np.maximum(dist_bil, 1e-16), "--", color="C1", lw=1.5,
+                    label=r"Bilinear N=3")
+        ax.semilogy(t_grid, np.maximum(dist_dir, 1e-16), "--", color="C0", lw=1.5,
+                    label=r"Direct β N=2: $\equiv 0$")
+        ax.set_xlabel(r"$t$"); ax.set_ylabel(r"$|U_2 - \beta(\xi_b)\,U_0|$", fontsize=9)
+        if row == 0:
+            ax.set_title("(B)  Off-manifold distance", fontsize=9)
+        ax.legend(fontsize=7, loc="lower right")
+        ax.grid(alpha=0.3, which="both")
+
+        ax = axes[row, 2]
+        ax.plot(t_grid, gam_kin, "k:", lw=1.6, label="Kinetic")
+        ax.plot(t_grid, gam_bil, "--", color="C1", lw=1.5, label="Bilinear N=3")
+        ax.plot(t_grid, gam_dir, "--", color="C0", lw=1.5, label="Direct β N=2")
+        ax.axhline(g_kin, color="gray", lw=0.8)
+        ax.set_xlabel(r"$t$"); ax.set_ylabel(r"$d\log|E|/dt$", fontsize=9)
+        if row == 0:
+            ax.set_title("(C)  Instantaneous growth rate", fontsize=9)
+        ax.set_ylim(-0.05, max(0.25, 1.3 * np.nanmax(gam_bil[nh:])))
+        ax.legend(fontsize=7, loc="upper right")
+        ax.grid(alpha=0.3)
+
+    fig.suptitle(rf"N=3 bilinear vs N=2 Direct β vs kinetic, "
+                 rf"$u_b={u_b},\;\varepsilon={eps}$  —  three initializations",
+                 fontsize=13, y=1.01)
+    fig.tight_layout()
+    out = FIG_DIR / "fig_manifold_transient.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
@@ -1235,7 +1764,7 @@ if __name__ == "__main__":
         print("=== fig_u2_sweep ===")
         fig_u2_sweep()
     else:
-        print("sweep_u2_timedomain.npz not found — run sweep_u2_timedomain.py first")
+        print("sweep_u2_timedomain.npz not found — run: python -m bot.sweeps.sweep_u2_timedomain")
 
     print("=== fig_u2_landau_timedomain ===")
     fig_u2_landau_timedomain()
@@ -1254,3 +1783,12 @@ if __name__ == "__main__":
 
     print("=== fig_u2_landau_twomode ===")
     fig_u2_landau_twomode()
+
+    if all_figs or (RUN_DIR / "sweep_singlemode.npz").exists():
+        print("=== fig_singlemode_sweep ===")
+        fig_singlemode_sweep()
+    else:
+        print("sweep_singlemode.npz not found — run: python -m bot.sweeps.sweep_singlemode")
+
+    print("=== fig_pade_xib_sweep ===")
+    fig_pade_xib_sweep()

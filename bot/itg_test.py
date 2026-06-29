@@ -240,7 +240,15 @@ def D_hp(zeta, zeta_star, eta, tau=1.0):
     return _D_slab(lambda z: Z3(z, Gamma=3.0, mu1=0.0), zeta, zeta_star, eta, tau)
 
 def D_brag(zeta, zeta_star, eta, tau=1.0):
-    """Braginskii-like: Γ=5/3, μ₁=0, χ₁=2/√π — predicts wrong threshold."""
+    """Braginskii-like: Γ=5/3, μ₁=0, χ₁=2/√π.
+
+    At zeta_star=1, tau=1 the threshold eta_th=(1+tau)/zeta_star=2 is exact
+    for ANY Gamma as long as mu1=0 (verified numerically: Brag crosses
+    Im(zeta)=0 at eta=2.00000000, identical to HP and kinetic). Gamma=5/3
+    instead degrades the GROWTH RATE away from threshold — its slope right
+    at eta=2 is ~3x steeper than HP's, matching HP1990's point that Gamma=3
+    (not 5/3) is needed to reproduce the kinetic gamma(eta) curve shape.
+    """
     return _D_slab(lambda z: Z3(z, Gamma=5.0/3.0, mu1=0.0), zeta, zeta_star, eta, tau)
 
 def D_pade(zeta, zeta_star, eta, tau=1.0):

@@ -176,14 +176,13 @@ def fig_response_function(Ns: list[int] = [3, 4, 5, 6],
                           xi_range: tuple[float, float] = (-3.0, 3.0),
                           n_xi: int = 401,
                           include_inference: bool = True) -> None:
-    """Hunana-style: closure response vs exact -√π Z'(ξ) along real ξ.
+    """Hunana-style: closure response vs exact kinetic Z'(ξ) along real ξ.
 
     Overlays the Padé hierarchy for N in Ns. If include_inference, also
     overlays the trained inference closure (matches kinetic to NN precision).
     """
     xi = np.linspace(xi_range[0], xi_range[1], n_xi)
-    sqrt_pi = float(np.sqrt(np.pi))
-    target = -sqrt_pi * Zprime(xi)
+    target = Zprime(xi)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
     colors = plt.cm.viridis(np.linspace(0.15, 0.85, len(Ns)))
@@ -204,14 +203,14 @@ def fig_response_function(Ns: list[int] = [3, 4, 5, 6],
     # effective Z' on this plot.
 
     axes[0].set_xlabel(r"$\xi_b$")
-    axes[0].set_ylabel(r"Re $[-\sqrt{\pi}\, Z'(\xi_b)]$")
+    axes[0].set_ylabel(r"Re $[Z'(\xi_b)]$")
     axes[0].set_title("real part")
     axes[0].grid(alpha=0.3)
     axes[0].legend(fontsize=9, loc="best")
     axes[0].axhline(0, color="gray", lw=0.5)
 
     axes[1].set_xlabel(r"$\xi_b$")
-    axes[1].set_ylabel(r"Im $[-\sqrt{\pi}\, Z'(\xi_b)]$")
+    axes[1].set_ylabel(r"Im $[Z'(\xi_b)]$")
     axes[1].set_title("imaginary part  (Landau resonance)")
     axes[1].grid(alpha=0.3)
     axes[1].legend(fontsize=9, loc="best")
@@ -223,7 +222,7 @@ def fig_response_function(Ns: list[int] = [3, 4, 5, 6],
     axes[2].grid(alpha=0.3, which="both")
     axes[2].legend(fontsize=9, loc="best")
 
-    fig.suptitle(r"Padé hierarchy vs kinetic $-\sqrt{\pi}\, Z'(\xi_b)$",
+    fig.suptitle(r"Padé hierarchy vs kinetic $Z'(\xi_b)$",
                   fontsize=13, y=1.02)
     fig.tight_layout()
     out = FIG_DIR / "fig_response_function.png"

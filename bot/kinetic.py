@@ -38,13 +38,22 @@ def kinetic_dispersion(omega, k, u_b, eps):
     return 1.0 - 1.0 / omega**2 - (eps / k**2) * Zprime(xi)
 
 
-def find_kinetic_mode(k, u_b, eps, omega0):
-    """Newton-solve for an omega root of D_kin near omega0."""
-    def res(x):
-        D = kinetic_dispersion(x[0] + 1j * x[1], k, u_b, eps)
-        return [D.real, D.imag]
-    sol = root(res, [omega0.real, omega0.imag], method="hybr")
-    return sol.x[0] + 1j * sol.x[1]
+def find_kinetic_mode(k, u_b, eps, omega0, max_iter: int = 20, tol: float = 1e-12):
+    """Complex Newton iteration for a root of D_kin near omega0."""
+    omega = complex(omega0)
+    h = 1e-7
+    for _ in range(max_iter):
+        D = kinetic_dispersion(omega, k, u_b, eps)
+        if abs(D) < tol:
+            break
+        dD = (kinetic_dispersion(omega + h, k, u_b, eps) -
+              kinetic_dispersion(omega - h, k, u_b, eps)) / (2 * h)
+        step = D / dD
+        # guard against runaway steps
+        if abs(step) > 0.5:
+            step *= 0.5 / abs(step)
+        omega -= step
+    return omega
 
 
 def trace_kinetic(ks, u_b, eps, omega0=1.0 + 0.01j):
@@ -100,10 +109,10 @@ def most_unstable_kinetic(k: float, u_b: float, eps: float,
 
     Filters out the spurious phase-mixed modes (very large Im, very large Re)
     and selects the omega with largest Im in a sensible Re-window.
+    Result is Newton-refined on the analytic dispersion to machine precision.
     """
     omegas = kinetic_modes_sspace(k, u_b, eps, N_v, V)
     mask = (omegas.real > omega_re_lo) & (omegas.real < omega_re_hi)
     cand = omegas[mask]
-    if len(cand) == 0:
-        return omegas[np.argmax(omegas.imag)]
-    return cand[np.argmax(cand.imag)]
+    omega0 = cand[np.argmax(cand.imag)] if len(cand) > 0 else omegas[np.argmax(omegas.imag)]
+    return find_kinetic_mode(k, u_b, eps, omega0)
