@@ -212,3 +212,47 @@ problem, while the HP heat-flux closure (built as a response-function
 approximation with the drive entering every moment equation exactly) performs
 as advertised.  Rigorous closure tests for ITG must be run as initial-value
 problems on the driven hierarchy.
+
+## 8. Comparison with the bump-on-tail testing strategy
+
+The BoT problem was *already* tested in the time domain
+(`bot/closed_loop.py`, `bot/sweeps/*`): s-space kinetic matrix vs the closed
+moment hierarchy with Padé/HP, direct-beta, direct-alpha, and NN closures,
+generic-δE and eigenmode/two-mode ICs, fitted γ_eff.  The slab-ITG machinery
+here deliberately mirrors that strategy component-for-component:
+
+| ingredient | BoT (`kinetic.py`, `closed_loop.py`) | slab ITG (`slab_itg.py`) |
+|---|---|---|
+| kinetic ground truth | s-grid Vlasov–Poisson matrix, eigendecomposition | w-grid DKE matrix, eigendecomposition |
+| field response | dynamical bulk (u, E) oscillator (Langmuir) | quasineutral: φ = U_0/τ, slaved instantaneously |
+| hierarchy drive | E enters rows n ≥ 1 (n M_{n−1} E); n = 0 row undriven | gradient sources at **every** row (σ_0 = ζ_*, σ_1 = −1/2, σ_2 = ζ_*(1+η)/2) |
+| on-manifold ratio | U_1/U_0 = ξ_b exactly | U_1/U_0 = ζ + ζ_*/τ ≠ ζ |
+| closure status | direct β/α **exact** per eigenmode | direct β/α off-manifold even for a pure eigenmode |
+| dispersion check | D_kin root ↔ matrix eig ↔ time fit | same triple check (§4.1) |
+
+Note `pade_coefficients(3)` = [iχ1/2, 3/2, −iχ1] — the BoT "Padé N=3"
+closure IS the HP 3-pole heat-flux closure, so the identical closure can be
+run on both problems.
+
+**Side-by-side result** (`bot/figures/fig_bot_vs_itg_closures.png`, driver
+`bot/figs/fig_bot_vs_itg_closures.py`, data `bot/runs/bot_vs_itg_closures.npz`;
+BoT at u_b = 5, ε = 0.05, k = 0.24, δE IC; ITG at ζ_* = τ = 1, η = 4.5, δn IC):
+
+| closure | BoT fitted mode (kin: 0.91910 + 0.17001i) | ITG fitted mode (kin: 0.64828 + 0.21920i) |
+|---|---|---|
+| HP 3-pole | 0.92025 + 0.17861i (γ +5.1%) | 0.61192 + 0.20395i (γ −7.0%) |
+| direct β (N=2) | 0.91910 + 0.17001i (exact) | −1.615 − 0.314i (decays; no ITG) |
+| direct α (N=3) | 0.91910 + 0.17001i (exact) | 0.350 + 0.598i (spurious, ~2.7× γ) |
+
+The closure ranking **flips** between problems.  On BoT the per-mode direct
+closures are exact by construction and HP is the ~5% approximation; on ITG
+the direct closures inherit an uncontrolled off-manifold error from the
+gradient drive and fail qualitatively, while HP degrades only mildly
+(5% → 7%).  This is the faithful, like-for-like comparison: the same
+closures, the same initial-value strategy, and the difference in outcome is
+attributable purely to how the drive enters the hierarchy — i.e., it is a
+property of the closures, not of the testing methodology.  Implication for
+the BoT program: closures learned/validated on the undriven (BoT/Landau)
+manifold should be expected to transfer to driven problems only if the
+closure inputs are augmented to carry the drive (e.g. features beyond
+U_1/U_0, or response-function-matched forms like HP's).
