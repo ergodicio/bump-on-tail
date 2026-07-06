@@ -256,3 +256,69 @@ the BoT program: closures learned/validated on the undriven (BoT/Landau)
 manifold should be expected to transfer to driven problems only if the
 closure inputs are augmented to carry the drive (e.g. features beyond
 U_1/U_0, or response-function-matched forms like HP's).
+
+## 9. Repairing the direct closure: the ζ̂-shift and the ITG-manifold ratio
+
+The failure mode identified in §5 suggests a fix: on the ITG eigenmode the
+exact n = 0 moment equation plus quasineutrality give U_1/U_0 = ζ + ζ_*/τ,
+so the mode frequency is recoverable from the moments as
+
+    ζ̂ = U_1/U_0 − ζ_*/τ.
+
+Two repair levels were implemented (`bot/slab_itg.py`, `variant=` argument of
+`direct_beta_evolve` / `direct_alpha_evolve`; driver
+`bot/figs/fig_slab_itg_direct_variants.py`, data
+`bot/runs/slab_itg_direct_variants.npz`):
+
+**(a) Shift only** — U_2 = β(ζ̂)U_0 with the gradient-free β.  Analytically,
+the closed N=2 dispersion becomes ζ(ζ+ζ_*/τ) − 1/(2τ) = β(ζ), i.e.
+1 − 2ζζ_* + (ζ − 2ζ_*ζ²)Z(ζ) + τ = 0 — exactly the kinetic dispersion
+**frozen at η = 2**.  The shift fixes the frequency argument but η still
+never enters the system, so it remains η-independent: time-domain fits sit
+at ζ ≈ 0.61–0.64 − 0.32…0.35i at every η (the η=2 kinetic root is
+0.6086 − 0.3132i), always damped.  Not a usable ITG closure.
+
+**(b) Shift + ITG-manifold closure function** — replace β with the ratio the
+kinetic eigenmode actually has.  With I_0 = Z, I_{n+1} = ζI_n + M_n, the
+manifold moments are U_n/φ = ζ_*(1−η/2)I_n + ζ_*ηI_{n+2} − I_{n+1}, and
+
+    β_itg(ζ; ζ_*, η) = (U_2/U_0)|_manifold ,   α_itg = (U_3/U_0)|_manifold
+
+evaluated at ζ̂.  The drive now lives inside the closure — resolving the §3
+structural objection (η enters the N=2 system through β_itg).
+
+Exactness: the closed-system characteristic equations
+ζ(ζ+ζ_*/τ) − 1/(2τ) = β_itg(ζ)  (N=2)  and
+ζ[ζ(ζ+ζ_*/τ) − 1/(2τ)] + ζ_*(1+η)/(2τ) = α_itg(ζ)  (N=3)
+are satisfied by the kinetic root to machine precision (checked at η = 4.5:
+|char| ~ 4e-15).
+
+Spectral structure (Newton root sweep over the UHP, ζ_* = τ = 1):
+
+| η | kinetic root | N=2 β_itg UHP roots | N=3 α_itg UHP roots |
+|---|---|---|---|
+| 2.5 | none (stable) | none | 0.250 + 1.299i |
+| 4.5 | 0.648 + 0.219i | 0.648 + 0.219i only | 0.648+0.219i AND 0.250+1.639i |
+| 6.0 | 0.688 + 0.414i | 0.688 + 0.414i only | 0.688+0.414i AND 0.250+1.854i |
+
+* **N=2 β_itg is exact AND spectrally clean**: its only growing root is the
+  kinetic one, and none below threshold.  Time-domain fits from a generic
+  density IC reproduce the kinetic mode to 4–5 digits at every η ∈ [2.5, 6]
+  including the damped branch (η = 2.5: −0.169 vs kinetic −0.170).  This is
+  the correct generalization of the BoT direct closure to slab ITG.
+* **N=3 α_itg is exact but unstable**: a spurious root at Re ζ = 0.25 with
+  γ ≈ 1.1–1.9 grows even where the kinetic system is stable and dominates
+  every IC tried (including the eigenmode-projected one) — the same
+  exact-but-unstable pathology as the BoT paper §4 NN blow-up.  Curiously
+  Re(ζ_spurious) = 0.250 to 5 digits at all η scanned.
+* Caveat: at η ≲ 2 the kinetic initial-value evolution is dominated by a
+  fast-damped branch (fit ζ ≈ −2.1 − 0.20i) that the N=2 closed system does
+  not contain; β_itg instead sits on its own near-marginal root there
+  (ζ ≈ 0.126 − 0.006i at η = 1.5).  Deep in the stable regime the closure
+  reproduces the ITG branch, not the full multi-branch transient.
+
+Implication for the NN-closure program: the function an ITG-capable NN
+closure must learn is β_itg(ζ̂; ζ_*, η) — i.e. the closure inputs must
+include the drive parameters (or equivalently features that resolve them),
+and the N=2 level is preferable to N=3, which is spectrally poisoned even
+with the exact manifold closure.

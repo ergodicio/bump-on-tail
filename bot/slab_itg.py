@@ -100,6 +100,44 @@ def alpha_closure(z):
     return z**3 - z / Zprime(z)
 
 
+# ── ITG-manifold moments and closures ────────────────────────────────────────
+# On the kinetic ITG eigenmode g = phi S(w)/(w - zeta), so with
+# I_n(zeta) = int w^n F0/(w - zeta) dw   (I_0 = Z, I_{n+1} = zeta I_n + M_n):
+#     U_n / phi = zeta_*(1 - eta/2) I_n + zeta_* eta I_{n+2} - I_{n+1}
+# The manifold moment ratios therefore depend on (zeta_*, eta) — the drive
+# lives inside the closure, unlike the gradient-free beta/alpha.
+
+_MAXW_M = (1.0, 0.0, 0.5, 0.0, 0.75, 0.0)   # M_0..M_5
+
+
+def manifold_Un_over_phi(z, zeta_star: float, eta: float, n_max: int = 3):
+    """U_n/phi on the kinetic ITG manifold, n = 0..n_max (needs I_{n_max+2})."""
+    I = [Z(z)]
+    for n in range(n_max + 2):
+        I.append(z * I[-1] + _MAXW_M[n])
+    return [zeta_star * (1.0 - 0.5 * eta) * I[n]
+            + zeta_star * eta * I[n + 2] - I[n + 1]
+            for n in range(n_max + 1)]
+
+
+def beta_itg(z, zeta_star: float, eta: float):
+    """Exact U_2/U_0 on the ITG manifold at frequency z (cf. beta_closure)."""
+    U = manifold_Un_over_phi(z, zeta_star, eta, n_max=2)
+    den = U[0]
+    if abs(den) < 1e-12:
+        den = 1e-12 * (den / abs(den) if den != 0 else 1.0)
+    return U[2] / den
+
+
+def alpha_itg(z, zeta_star: float, eta: float):
+    """Exact U_3/U_0 on the ITG manifold at frequency z (cf. alpha_closure)."""
+    U = manifold_Un_over_phi(z, zeta_star, eta, n_max=3)
+    den = U[0]
+    if abs(den) < 1e-12:
+        den = 1e-12 * (den / abs(den) if den != 0 else 1.0)
+    return U[3] / den
+
+
 # ── kinetic response / dispersion relation ───────────────────────────────────
 
 def R_kinetic(zeta, zeta_star: float, eta: float):
@@ -294,16 +332,48 @@ def _safe_ratio(U1, U0, floor: float = 1e-15,
     return r * (max_mag / m) if m > max_mag else r
 
 
-def _direct_beta_rhs(t, y_real, zeta_star: float, eta: float, tau: float):
-    """N=2 system (U_0, U_1) with U_2 = beta(U_1/U_0) U_0.
+def _closure_arg(U1, U0, zeta_star: float, tau: float, variant: str):
+    """Closure argument: r_1 = U_1/U_0, drive-shifted for non-plain variants.
 
-    Note eta does not appear: sigma_0, sigma_1 are eta-independent and the
-    closure carries no eta.  The argument is kept for interface symmetry.
+    On the ITG eigenmode the exact n=0 moment equation with quasineutrality
+    gives U_1/U_0 = zeta + zeta_*/tau, so zeta_hat = U_1/U_0 - zeta_*/tau
+    recovers the mode frequency ('shifted' and 'itg' variants).
+    """
+    r1 = _safe_ratio(U1, U0)
+    if variant == "plain":
+        return r1
+    return r1 - zeta_star / tau
+
+
+def _beta_of(variant: str, z, zeta_star: float, eta: float):
+    """U_2/U_0 closure value: gradient-free beta or ITG-manifold beta."""
+    if variant == "itg":
+        return beta_itg(z, zeta_star, eta)
+    return beta_closure(z)
+
+
+def _alpha_of(variant: str, z, zeta_star: float, eta: float):
+    """U_3/U_0 closure value: gradient-free alpha or ITG-manifold alpha."""
+    if variant == "itg":
+        return alpha_itg(z, zeta_star, eta)
+    return alpha_closure(z)
+
+
+def _direct_beta_rhs(t, y_real, zeta_star: float, eta: float, tau: float,
+                     variant: str):
+    """N=2 system (U_0, U_1) with U_2 closed per variant:
+
+    'plain'   U_2 = beta(U_1/U_0) U_0            (eta-independent; no ITG)
+    'shifted' U_2 = beta(zeta_hat) U_0           (still eta-independent: its
+              dispersion is exactly the kinetic one frozen at eta = 2)
+    'itg'     U_2 = beta_itg(zeta_hat; zeta_*, eta) U_0   (kinetic root is an
+              exact eigenvalue of the closed system)
     """
     y = y_real[:2] + 1j * y_real[2:]
     U0, U1 = y
     phi = U0 / tau
-    U2 = U0 * beta_closure(_safe_ratio(U1, U0))
+    z = _closure_arg(U1, U0, zeta_star, tau, variant)
+    U2 = U0 * _beta_of(variant, z, zeta_star, eta)
     dU0 = -1j * U1 + 1j * zeta_star * phi
     dU1 = -1j * U2 - 0.5j * phi
     dy = np.array([dU0, dU1])
@@ -312,25 +382,28 @@ def _direct_beta_rhs(t, y_real, zeta_star: float, eta: float, tau: float):
 
 def direct_beta_evolve(zeta_star: float, eta: float, tau: float,
                        t_grid: np.ndarray, y0: np.ndarray,
-                       rtol: float = 1e-9, atol: float = 1e-12) -> dict:
+                       rtol: float = 1e-9, atol: float = 1e-12,
+                       variant: str = "plain") -> dict:
     """Evolve the N=2 direct-beta system from y0 = (U_0, U_1)."""
     y0_real = np.concatenate([y0.real, y0.imag])
     sol = solve_ivp(_direct_beta_rhs, (t_grid[0], t_grid[-1]), y0_real,
-                    t_eval=t_grid, args=(zeta_star, eta, tau),
+                    t_eval=t_grid, args=(zeta_star, eta, tau, variant),
                     method="RK45", rtol=rtol, atol=atol)
     if not sol.success:
-        print(f"  direct_beta_evolve WARNING: {sol.message}")
+        print(f"  direct_beta_evolve[{variant}] WARNING: {sol.message}")
     n = len(sol.t)
     Y = sol.y[:2, :n] + 1j * sol.y[2:, :n]
     return {"t": sol.t, "U0": Y[0], "U1": Y[1], "phi": Y[0] / tau}
 
 
-def _direct_alpha_rhs(t, y_real, zeta_star: float, eta: float, tau: float):
-    """N=3 system (U_0, U_1, U_2) with U_3 = alpha(U_1/U_0) U_0."""
+def _direct_alpha_rhs(t, y_real, zeta_star: float, eta: float, tau: float,
+                      variant: str):
+    """N=3 system (U_0, U_1, U_2) with U_3 closed per variant (see beta)."""
     y = y_real[:3] + 1j * y_real[3:]
     U0, U1, U2 = y
     phi = U0 / tau
-    U3 = U0 * alpha_closure(_safe_ratio(U1, U0))
+    z = _closure_arg(U1, U0, zeta_star, tau, variant)
+    U3 = U0 * _alpha_of(variant, z, zeta_star, eta)
     dU0 = -1j * U1 + 1j * zeta_star * phi
     dU1 = -1j * U2 - 0.5j * phi
     dU2 = -1j * U3 + 1j * zeta_star * (1.0 + eta) * 0.5 * phi
@@ -340,14 +413,15 @@ def _direct_alpha_rhs(t, y_real, zeta_star: float, eta: float, tau: float):
 
 def direct_alpha_evolve(zeta_star: float, eta: float, tau: float,
                         t_grid: np.ndarray, y0: np.ndarray,
-                        rtol: float = 1e-9, atol: float = 1e-12) -> dict:
+                        rtol: float = 1e-9, atol: float = 1e-12,
+                        variant: str = "plain") -> dict:
     """Evolve the N=3 direct-alpha system from y0 = (U_0, U_1, U_2)."""
     y0_real = np.concatenate([y0.real, y0.imag])
     sol = solve_ivp(_direct_alpha_rhs, (t_grid[0], t_grid[-1]), y0_real,
-                    t_eval=t_grid, args=(zeta_star, eta, tau),
+                    t_eval=t_grid, args=(zeta_star, eta, tau, variant),
                     method="RK45", rtol=rtol, atol=atol)
     if not sol.success:
-        print(f"  direct_alpha_evolve WARNING: {sol.message}")
+        print(f"  direct_alpha_evolve[{variant}] WARNING: {sol.message}")
     n = len(sol.t)
     Y = sol.y[:3, :n] + 1j * sol.y[3:, :n]
     return {"t": sol.t, "U0": Y[0], "U1": Y[1], "U2": Y[2], "phi": Y[0] / tau}
