@@ -309,8 +309,12 @@ Spectral structure (Newton root sweep over the UHP, ζ_* = τ = 1):
 * **N=3 α_itg is exact but unstable**: a spurious root at Re ζ = 0.25 with
   γ ≈ 1.1–1.9 grows even where the kinetic system is stable and dominates
   every IC tried (including the eigenmode-projected one) — the same
-  exact-but-unstable pathology as the BoT paper §4 NN blow-up.  Curiously
-  Re(ζ_spurious) = 0.250 to 5 digits at all η scanned.
+  exact-but-unstable pathology as the BoT paper §4 NN blow-up.  The spurious
+  root is fully analytic: it is a zero of the prefactor polynomial
+  P_3 = ζ_*ζ² − ζ/2 + ζ_*(1+η)/2 in the factorized characteristic equation
+  (Appendix A.5), giving Re ζ = 1/(4ζ_*) exactly (hence the observed 0.250)
+  and γ = √(2ζ_*²(1+η) − 1/4)/(2ζ_*), matching the observed values to all
+  digits.
 * Caveat: at η ≲ 2 the kinetic initial-value evolution is dominated by a
   fast-damped branch (fit ζ ≈ −2.1 − 0.20i) that the N=2 closed system does
   not contain; β_itg instead sits on its own near-marginal root there
@@ -322,3 +326,100 @@ closure must learn is β_itg(ζ̂; ζ_*, η) — i.e. the closure inputs must
 include the drive parameters (or equivalently features that resolve them),
 and the N=2 level is preferable to N=3, which is spectrally poisoned even
 with the exact manifold closure.
+
+## Appendix A: derivation of the ITG-manifold closure β_itg
+
+### A.1 Eigenmode solution of the reduced DKE
+
+On a single eigenmode g, φ ~ e^{−iζt} the reduced DKE (§1)
+
+    ∂g/∂t = −i w g + i φ S(w),   S(w) = ( ζ_*[1 + η(w² − 1/2)] − w ) F0(w)
+
+becomes algebraic: −ζ g = −w g + φ S(w), i.e.
+
+    g(w) = φ S(w) / (w − ζ).                                        (A1)
+
+This is the exact velocity-space shape of the perturbation on the mode; all
+manifold quantities below are moments of (A1).
+
+### A.2 Manifold moments, two equivalent ways
+
+**(i) Via Hilbert-transform integrals.**  Define
+I_n(ζ) = ∫ wⁿ F0/(w − ζ) dw.  Writing wⁿ⁺¹ = wⁿ(w − ζ) + ζwⁿ gives the
+recurrence
+
+    I_0 = Z(ζ),    I_{n+1} = ζ I_n + M_n        (M_n = ∫wⁿF0: 1, 0, 1/2, 0, 3/4, …)
+
+(Z is the Faddeeva-continued plasma dispersion function, valid in both
+half-planes).  Expanding S(w) in (A1):
+
+    U_n/φ = ζ_*(1 − η/2) I_n + ζ_* η I_{n+2} − I_{n+1}.             (A2)
+
+This is what `manifold_Un_over_phi` implements.
+
+**(ii) Via the moment equations.**  Equivalently, the eigenmode form of the
+exact hierarchy dU_n/dt = −iU_{n+1} + iφσ_n (§3) gives the *manifold
+recurrence*
+
+    U_{n+1} = ζ U_n + σ_n φ,     σ_0 = ζ_*,  σ_1 = −1/2,  σ_2 = ζ_*(1+η)/2.  (A3)
+
+Both routes agree identically ((A2) satisfies (A3) by the I_n recurrence).
+
+### A.3 Closed forms in terms of the response function
+
+Since U_0/φ = −R(ζ) by definition of the response (†), iterating (A3) gives
+compact closed forms:
+
+    U_1/U_0 = ζ + ζ_* φ/U_0                = ζ − ζ_*/R
+    β_itg   ≡ U_2/U_0 = ζ(U_1/U_0) − φ/(2U_0)   = ζ² − (ζζ_* − 1/2)/R(ζ)     (A4)
+    α_itg   ≡ U_3/U_0 = ζ β_itg + ζ_*(1+η) φ/(2U_0)
+                                            = ζ β_itg − ζ_*(1+η)/(2R(ζ))     (A5)
+
+(verified against (A2) to ~1e-15).  **Gradient-free limit:** at ζ_* = 0,
+R = 1 + ζZ = −Z′/2, so (A4) → ζ² − 1/Z′ = β(ζ) and (A5) → ζ³ − ζ/Z′ = α(ζ):
+the BoT closures are recovered exactly.  All of the drive dependence of the
+manifold closure enters through R(ζ; ζ_*, η) and the explicit ζ_* terms.
+
+### A.4 The frequency estimate ζ̂
+
+The first line of (A4) evaluated at the *eigenmode of the coupled system*
+(where quasineutrality fixes R = −τ, i.e. φ/U_0 = 1/τ) gives
+
+    U_1/U_0 = ζ + ζ_*/τ    ⇒    ζ̂ = U_1/U_0 − ζ_*/τ = ζ,
+
+which is the shift used as the closure argument.  (Off the coupled
+eigenmode, U_1/U_0 = ζ − ζ_*/R(ζ) ≠ ζ + ζ_*/τ, so ζ̂ is exact only where
+the dispersion relation holds — transients incur a controlled ansatz error.)
+
+### A.5 Exactness and spectral structure of the closed systems
+
+Substituting the closures into the closed-system characteristic equations
+and using (A4)–(A5), both factor through the kinetic dispersion function:
+
+    N=2:  ζ(ζ + ζ_*/τ) − 1/(2τ) − β_itg(ζ)
+          = (ζζ_* − 1/2) (R + τ) / (τ R)                            (A6)
+
+    N=3:  ζ[ζ(ζ + ζ_*/τ) − 1/(2τ)] + ζ_*(1+η)/(2τ) − α_itg(ζ)
+          = P_3(ζ) (R + τ) / (τ R),   P_3 = ζ_*ζ² − ζ/2 + ζ_*(1+η)/2  (A7)
+
+So the eigenvalues of the closed fluid systems are exactly the kinetic
+dispersion roots (R + τ = 0), **plus the zeros of the prefactor polynomial**
+(minus poles at R = 0).  This explains the §9 numerics completely:
+
+* **N=2:** P_2 = ζζ_* − 1/2 has the single real zero ζ = 1/(2ζ_*) — no
+  growing spurious mode ever.  The β_itg N=2 closure is not merely "exact on
+  the eigenmode": its dispersion relation is *equivalent* to the kinetic one
+  (up to an isolated marginal point on the real axis).
+* **N=3:** P_3 has the complex-conjugate pair
+  ζ = [1/2 ± i√(2ζ_*²(1+η) − 1/4)] / (2ζ_*), one of which is always in the
+  UHP.  At ζ_* = 1 this is Re ζ = 1/4 exactly — the "curious" 0.250 observed
+  numerically — with γ = √(2(1+η) − 1/4)/2: γ(η=2.5, 4.5, 6) =
+  1.29904, 1.63936, 1.85405, matching the observed spurious roots to all
+  digits.  The spurious instability is thus an analytic artifact of where
+  the closure identity degenerates (the drive part of the n = 2 row), not a
+  numerical issue and not kinetic physics; it grows like √η and always
+  outruns the ITG mode.
+
+The same factorization viewpoint applied at general N says: the direct
+manifold closure at level N is spectrally safe iff P_N(ζ) has no UHP zeros —
+a checkable a-priori criterion.  For slab ITG only N=2 passes.
