@@ -423,3 +423,78 @@ dispersion roots (R + τ = 0), **plus the zeros of the prefactor polynomial**
 The same factorization viewpoint applied at general N says: the direct
 manifold closure at level N is spectrally safe iff P_N(ζ) has no UHP zeros —
 a checkable a-priori criterion.  For slab ITG only N=2 passes.
+
+## 10. Spurious-root anatomy: HP vs the direct manifold closures
+
+(Driver `bot/figs/fig_slab_itg_hp_spectrum.py`, figure
+`bot/figures/fig_slab_itg_hp_spectrum.png`, data
+`bot/runs/slab_itg_hp_spectrum.npz`.)
+
+The Appendix A factorization suggests a taxonomy: a closure's spectrum can
+deviate from kinetic either by *approximating the response* R(ζ) or by
+*adding prefactor zeros* to an exact response.  HP and the direct manifold
+closures sit at opposite corners:
+
+**HP (Γ=3) — approximate response, no extra roots.**  The closed system is
+linear and 3×3, so it has exactly three roots, all of them approximations of
+true kinetic roots: one tracks the ITG/drift branch (γ error 5–10% above
+threshold), one tracks the fast-damped drift branch (ζ ≈ −2), and one deeply
+damped root (ζ ≈ 0.3 − 0.8i…1.3i) stands in for the Landau continuum.  There
+is no spurious growth anywhere in the (ζ_*, η) plane scanned.
+
+Two sharper statements, both verified numerically:
+
+1. **The Z-substitution identity is exact for Γ = 3.**  The eigenvalues of
+   the driven HP fluid matrix coincide with the roots of R_s(Z → Z₃) + τ
+   (the corrected `itg_test.py` methodology) to 10⁻⁹ at all (η, root) pairs
+   checked.  So the frequency-domain substitution test, invalid for the
+   nonlinear direct closures (§7), is rigorous for the HP closure.
+2. **HP Γ=3 reproduces the kinetic threshold exactly at every ζ_*** —
+   η_th agrees with 1 + √(1 + 2τ(1+τ)/ζ_*²) to 4+ decimals across
+   ζ_* ∈ [0.3, 4] (bisection on the 3×3 eigenvalues).  This is structural,
+   not a numerical coincidence: given the substitution identity, a marginal
+   root is real, and since Im Z₃ ≠ 0 on the real axis (the χ₁ term — HP's
+   Landau-damping surrogate), Im D = 0 forces the same Z-independent bracket
+   condition ζ = ζ_*(1 − η/2 + ηζ²) as kinetically, and Re D = 0 then gives
+   the same polynomial condition 1 + τ − ηζζ_* = 0.  **Any closure that (i)
+   satisfies the substitution identity and (ii) retains Im Z_closure ≠ 0 on
+   the real axis inherits the exact kinetic marginal boundary**, while its
+   growth rates away from marginality carry the response-approximation
+   error.  (This generalizes HP's η_th observation to all ζ_*, and is the
+   same mechanism behind the closure-independent thresholds seen in the
+   fixed `itg_test.py` scan.)
+
+**Γ = 5/3 — breaks the substitution identity, spuriously unstable.**  With
+Γ ≠ 3 the closure row no longer respects the exact Maxwellian recurrence,
+the substitution identity fails (matrix eigenvalues ≠ substitution roots by
+O(1)), and requirement (i) above is lost: the Γ=5/3 system's threshold at
+ζ_* = 1 is η_th ≈ 1.03 (growth is weak at first, γ = 0.07 at η = 1.5, which
+is why §6 visually reported onset ≈ 2.4) — spuriously unstable across
+1 ≲ η ≲ 3.24 where the kinetic system is stable, and η_th drops to ~0.7 at
+large ζ_*.  Also note the corrected-`itg_test` Brag curve (Z → Z₃^{Γ=5/3}
+substitution) does *not* represent the actual Γ=5/3 fluid system — the real
+system is substantially worse than the substitution suggests.
+
+**Direct manifold closures — exact response, prefactor zeros.**  Mirror
+image of HP: the tracked root is exact (not 5–10% off), but char_N =
+P_N(ζ)(R+τ)/(τR) adds the zeros of P_N.  N=2 is clean (P_2 real zero only;
+its threshold curve coincides with kinetic identically); N=3 adds the
+always-dominant UHP zero of P_3 with onset η_sp = max(0, 1/(8ζ_*²) − 1) —
+i.e. unstable at essentially all η for ζ_* ≳ 0.35.
+
+Summary table (τ = 1):
+
+| closure | tracked-root error | extra/spurious growth | threshold η_th(ζ_*) |
+|---|---|---|---|
+| HP Γ=3 | γ 5–10% above threshold | none found | exact (structural) |
+| HP Γ=5/3 | O(1) | one of its 3 roots grows from η ≈ 1 (ζ_*=1) | badly low |
+| direct β_itg N=2 | exact | none (P_2 zero is real) | exact (identical dispersion) |
+| direct α_itg N=3 | exact | P_3 zero, γ ~ √η, always dominant | ≈ 0 |
+| direct β/α (gradient-free), shifted or not | n/a | η-independent / spurious | none / wrong |
+
+Practical reading: for a *linear* closure the thing to certify is the
+substitution identity (then thresholds are free and the only cost is
+response error in γ); for a *direct/nonlinear* closure the thing to certify
+is the prefactor polynomial P_N (then the response is free and the only risk
+is spurious prefactor zeros).  β_itg at N=2 and HP Γ=3 each pass their
+respective certificate; α_itg at N=3 and Γ=5/3 each fail theirs.
