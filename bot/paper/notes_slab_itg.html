@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Notes: time-domain tests of the slab-ITG dispersion relation</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Notes: time-domain tests of the slab-ITG dispersion
+relation</h1>
+</header>
+<h1
+id="notes-time-domain-tests-of-the-slab-itg-dispersion-relation-hammettperkins">Notes:
+time-domain tests of the slab-ITG dispersion relation
+(Hammett–Perkins)</h1>
+<p>Branch: <code>slab_itg_timedomain</code>. Code:
+<code>bot/slab_itg.py</code>; drivers
+<code>bot/figs/fig_slab_itg_growth.py</code>,
+<code>bot/figs/fig_slab_itg_timedomain.py</code>.</p>
+<p>Goal: rigorous initial-value tests of the slab-ITG problem from
+<code>Slab_ITG_Closure_Relations.pdf</code> (following HP PRL 64, 3019
+(1990)): solve the parallel slab DKE in Fourier space <strong>in the
+time domain</strong>, and compare against the fluid moment hierarchy
+solved in the time domain with the direct beta closure (plus HP
+heat-flux and direct-alpha closures for context). This goes beyond
+<code>bot/itg_test.py</code>, which only substitutes Z-function
+approximations into the frequency-domain response R_s.</p>
+<h2 id="model-and-normalization">1. Model and normalization</h2>
+<p>Slab DKE (source notes eq. 1–3), perturbations ~ exp(i k_y y + i
+k_par z − iωt), Maxwellian f0 with ∂f0/∂x = f0 [1/L_n + (mv²/2T0 −
+3/2)/L_T]:</p>
+<pre><code>∂f/∂t + i k_par v_par f = i (eΦ/T0) ( ω_*[1 + η(mv²/2T0 − 3/2)] − k_par v_par ) f0</code></pre>
+<p>with ω_* = (T0/eB) k_y/L_n, η = L_n/L_T. v_perp enters only through
+the drive; integrating over the perpendicular Maxwellian (⟨mv⊥²/2T0⟩ =
+1) reduces the problem <strong>exactly</strong> to 1D with drive η(w² −
+1/2), w = v_par/(√2 v_ti):</p>
+<pre><code>∂g/∂t = −i w g + i φ ( ζ_*[1 + η(w² − 1/2)] − w ) F0(w),   F0 = e^{−w²}/√π</code></pre>
+<p>Units: t in (k_par √2 v_ti)^{-1}, ζ = ω/(k_par √2 v_ti), ζ_*
+likewise, φ = eΦ/T0i, τ = T0i/T0e. Boltzmann electrons ñ_e = +n0 eΦ/T0e
+(standard sign; the source PDF writes a minus sign in the electron
+relation, which is inconsistent with its own dispersion relation — see
+§5) give quasineutrality φ = U_0/τ with U_0 = ∫ g dw = ñ_i/n0.</p>
+<h2 id="kinetic-response-and-dispersion-relation">2. Kinetic response
+and dispersion relation</h2>
+<p>Eigenmode ansatz in the reduced DKE, using ∫F0/(w−ζ) = Z, ∫wF0/(w−ζ)
+= 1+ζZ, ∫w²F0/(w−ζ) = ζ + ζ²Z:</p>
+<pre><code>R(ζ) = −U_0/φ = 1 − η ζ ζ_* + [ζ − ζ_*(1 − η/2 + η ζ²)] Z(ζ)      (†)</code></pre>
+<p>Dispersion: D(ζ) = R(ζ) + τ = 0. This matches the source PDF eq. (4).
+Sanity limits: ζ_* = 0 gives R = 1 + ζZ (Vlasov slab); ζ → 0 gives R → 1
+(adiabatic); τ ≪ 1 recovers the ion-acoustic wave ζ² = 1/(2τ).</p>
+<p><strong>Marginal stability (analytic).</strong> On the real-ζ axis Im
+Z = √π e^{−ζ²} ≠ 0, so a marginal root needs both the Z-coefficient
+bracket and the polynomial part to vanish: ζ = (1+τ)/(η ζ_<em>) and ζ =
+ζ_</em>(1 − η/2 + ηζ²). Eliminating ζ:</p>
+<pre><code>η_th = 1 + sqrt( 1 + 2 τ (1 + τ) / ζ_*² )</code></pre>
+<p>At ζ_* = 1, τ = 1: <strong>η_th = 1 + √5 ≈ 3.236</strong>. The HP
+value η_th = 2 is the ζ_* → ∞ (ω ≪ ω_*) limit of this formula.</p>
+<p><strong>Discrepancy with <code>bot/itg_test.py</code>.</strong>
+<code>itg_test.py</code> (<code>_D_slab</code>) uses
+<code>R_s = 1 − η ζ_*  + [...]Z</code> — the first gradient term is
+missing a factor ζ relative to (†). The −ηζζ_* term is forced by the
+polynomial part of ζ_* η ∫ w² F0/(w−ζ) dw = ζ_* η (ζ + ζ²Z); it cannot
+be absorbed by any convention choice. With the legacy form the threshold
+at ζ_* = τ = 1 comes out as (1+τ)/ζ_* = 2, which is where the “kinetic
+threshold = 2” claim in <code>itg_test.py</code> came from. The
+discretized DKE (independent of any Z algebra) adjudicates — see
+§4.1.</p>
+<h2 id="fluid-hierarchy-sources-and-closures">3. Fluid hierarchy,
+sources, and closures</h2>
+<p>Taking w-moments U_n = ∫ wⁿ g dw of the reduced DKE (M_n = ∫wⁿF0: 1,
+0, 1/2, 0, 3/4):</p>
+<pre><code>dU_n/dt = −i U_{n+1} + i φ σ_n,   σ_n = ζ_*[M_n + η(M_{n+2} − M_n/2)] − M_{n+1}
+σ_0 = ζ_*        (η exactly cancels: M_2 − M_0/2 = 0)
+σ_1 = −1/2
+σ_2 = ζ_*(1+η)/2  (η first enters here: M_4 − M_2/2 = 1/2)</code></pre>
+<p><strong>Structural observation:</strong> the temperature-gradient
+drive first enters the hierarchy at the n = 2 (pressure) equation. Any
+N=2 fluid model — including the direct beta closure U_2 = β(U_1/U_0)U_0,
+β(z) = z² − 1/Z′(z) — is therefore <em>exactly η-independent</em>: it
+cannot contain ITG physics no matter how accurate β is. This is
+invisible in the frequency-domain Z-substitution test of
+<code>itg_test.py</code> (where “U2 exact” trivially reproduces the
+kinetic result because it substitutes the exact Z into R_s), and is the
+central reason the time-domain test is more rigorous: the Z-substitution
+is <strong>not</strong> equivalent to actually closing the driven moment
+hierarchy.</p>
+<p>Closures implemented (<code>bot/slab_itg.py</code>): * <strong>direct
+beta</strong> (N=2): U_2 = β(U_1/U_0) U_0 — as in
+<code>bot/closed_loop.py</code>. * <strong>direct alpha</strong> (N=3):
+U_3 = α(U_1/U_0) U_0, α(z) = z³ − z/Z′(z). *
+<strong>Hammett–Perkins</strong> (N=3, linear): q̃ = −n0 χ1 √2 v_t
+(ik/|k|) T̃ with χ1 = 2/√π. In moment variables (q̃ = n0T0v̄(2U_3 − 3U_1),
+T̃/T0 = 2U_2 − U_0): U_3 = (Γ/2)U_1 − i(χ1/2)(2U_2 − U_0), Γ = 3.
+Verified analytically and numerically that in the gradient-free limit
+this hierarchy reproduces HP’s 3-pole response R_3
+(<code>itg_test.R3_hp</code>) exactly (agreement to 6+ digits at
+spot-checked complex ζ).</p>
+<p>Note that on the ITG eigenmode U_1/U_0 = ζ + ζ_<em>/τ ≠ ζ (the
+ζ_</em> source shifts the moment ratio), so the direct closures β(r1),
+α(r1) — exact on the <em>gradient-free</em> eigenmode manifold — are
+being evaluated off their manifold.</p>
+<h2 id="numerical-methods">4. Numerical methods</h2>
+<ul>
+<li><strong>Kinetic:</strong> velocity grid w ∈ [−W, W], N_w points
+(default 600, W=8); dg_j/dt = −i w_j g_j + i S(w_j)(Δw Σg)/τ. Modes via
+eigendecomposition (ζ = i·eigval, growing ⇔ Im ζ &gt; 0); time evolution
+via eigendecomposition (matrix exponential), same approach as
+<code>bot/kinetic.py</code> / <code>bot/closed_loop.py</code>.
+Recurrence time 2π/Δw ≈ 235 (600 pts) ≫ fit windows.</li>
+<li><strong>HP fluid:</strong> 3×3 linear system,
+eigendecomposition.</li>
+<li><strong>Direct beta / alpha:</strong> nonlinear (homogeneous
+degree-1) RHS, RK45 (rtol 1e-9), with the same |U_1/U_0| ≤ 12 safeguard
+as <code>bot/closed_loop.py</code>.</li>
+<li>Growth/frequency extracted from U_0(t) by log-magnitude and
+unwrapped-phase slopes over the second half of the record
+(<code>fit_mode</code>).</li>
+<li>Generic IC: density perturbation g0 = amp·F0(w) (fluid: U_0 = amp,
+U_2 = amp/2 from the same F0 shape, U_1 = 0).</li>
+</ul>
+<h3 id="verification-results-ζ_-1-τ-1">4.1 Verification results (ζ_* =
+1, τ = 1)</h3>
+<p>Discretized-DKE most-unstable eigenvalue vs roots of the two
+dispersion variants:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>η</th>
+<th>D_kinetic (†) root</th>
+<th>legacy (itg_test) root</th>
+<th>DKE matrix (N_w=400)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.0</td>
+<td>no growing root</td>
+<td>0.804 + 0.151i</td>
+<td>no growing mode</td>
+</tr>
+<tr>
+<td>3.5</td>
+<td>0.62366 + 0.05175i</td>
+<td>0.871 + 0.170i</td>
+<td>0.62368 + 0.05172i</td>
+</tr>
+<tr>
+<td>4.0</td>
+<td>0.63554 + 0.14041i</td>
+<td>0.919 + 0.181i</td>
+<td>0.63554 + 0.14041i</td>
+</tr>
+<tr>
+<td>5.0</td>
+<td>0.66137 + 0.29021i</td>
+<td>0.982 + 0.194i</td>
+<td>0.66137 + 0.29021i</td>
+</tr>
+</tbody>
+</table>
+<p>The matrix eigenvalues (no Z-function algebra involved) confirm (†)
+to 4–5 digits and confirm the threshold sits between η = 3.0 and 3.5
+(analytic 1+√5 ≈ 3.236), <strong>not</strong> at 2. The legacy form is
+unstable at η = 2.5–3 where the actual DKE has no growing mode.</p>
+<p>Time-domain fits reproduce the eigenvalues to 5 digits (η = 4.5):
+kinetic fit 0.64828 + 0.21920i vs root 0.64828 + 0.21920i; HP fluid fit
+0.61192 + 0.20395i vs eigenvalue 0.61192 + 0.20395i.</p>
+<h2 id="findings">5. Findings</h2>
+<ol type="1">
+<li><strong><code>itg_test.py</code> dispersion bug:</strong> the first
+gradient term of R_s must be 1 − ηζζ_<em>, not 1 − ηζ_</em>.
+Consequently the kinetic slab-ITG threshold at ζ_* = 1, τ = 1 is η_th =
+1 + √5 ≈ 3.236, not 2. η_th → 2 only as ζ_* → ∞. (The source PDF eq. (4)
+is correct; its eq. (5) and the Boltzmann-electron sign stated above it
+are internally inconsistent — quasineutrality with ñ_e = +n0eΦ/T0e gives
+D = R + τ, which is the form whose roots the discretized DKE
+reproduces.)</li>
+<li><strong>HP 3-moment closure works in the time domain:</strong> with
+the exact-hierarchy sources and U_3 = (3/2)U_1 − i(χ1/2)(2U_2 − U_0),
+the fluid growth rate tracks the kinetic one to ~5–10% above threshold
+(e.g. η = 5: γ = 0.268 vs 0.290) and its threshold is close to the
+kinetic 3.236.</li>
+<li><strong>Direct beta closure (N=2) fails structurally for
+ITG:</strong> the η drive cannot enter the (U_0, U_1) system; it
+converges to an η-independent damped drift-type mode (fit ζ ≈ −1.62 −
+0.31i at ζ_* = 1, τ = 1) at every η. The frequency-domain claim “U2
+exact = kinetic” in <code>itg_test.py</code> is an artifact of
+Z-substitution, not a property of the closed moment system.</li>
+<li><strong>Direct alpha closure (N=3) is qualitatively wrong for
+ITG:</strong> it grows far too fast (η = 4.5: γ ≈ 0.60 vs kinetic 0.22)
+because α(U_1/U_0) is exact only on the gradient-free manifold, and the
+ITG sources shift U_1/U_0 off that manifold (U_1/U_0 = ζ + ζ_*/τ on the
+true eigenmode). Closures that are provably exact for the
+bump-on-tail/Landau problem do not transfer to the driven ITG hierarchy;
+the HP closure — matched to the response function rather than to
+per-mode moment ratios — does.</li>
+</ol>
+<h2 id="figure-results">6. Figure results</h2>
+<h3
+id="botfiguresfig_slab_itg_growth.png-driver-botfigsfig_slab_itg_growth.py"><code>bot/figures/fig_slab_itg_growth.png</code>
+(driver <code>bot/figs/fig_slab_itg_growth.py</code>)</h3>
+<p>γ(η) and ω_r(η) at ζ_* = 1, τ = 1 (curves: dispersion roots /
+eigenvalues; markers: time-domain fits of U_0(t) from the
+density-perturbation IC). Data:
+<code>bot/runs/slab_itg_growth.npz</code>.</p>
+<ul>
+<li>Kinetic time-domain fits sit exactly on the DKE-derived dispersion
+curve (†) on <strong>both</strong> sides of threshold — the damped fits
+at η = 2.5, 3.0 (γ = −0.170, −0.050) continue the ITG branch smoothly
+through marginality at η_th = 3.236. The legacy (itg_test) curve is
+nowhere consistent with the initial-value kinetic solution: it predicts
+growth from η ≈ 2.1 and γ ≈ 0.18–0.19 saturating at large η, while the
+actual mode reaches γ = 0.41 by η = 6.</li>
+<li>HP fluid (Γ=3) tracks the kinetic ITG branch closely on both sides
+of threshold (η = 4: 0.132 vs 0.140; η = 6: 0.379 vs 0.414; threshold
+within ~1% of 3.236). Γ = 5/3 destroys this: spurious growth from η ≈
+2.4 and a much steeper γ(η) — consistent with HP’s argument for Γ =
+3.</li>
+<li>Direct beta (N=2): γ ≡ −0.267, ω_r ≡ −1.655 at every η
+(η-independent, as required by the hierarchy structure). No ITG.</li>
+<li>Direct alpha (N=3): spuriously unstable at <em>all</em> η scanned,
+including η = 1 (γ = +0.28) where the kinetic system is strongly damped;
+γ grows to ~0.74 at η = 6, nearly double kinetic. Also its ω_r branch is
+wrong (≈ 0.3–0.5 with the wrong trend).</li>
+</ul>
+<p>At η ≤ 2 the kinetic fit picks up a fast-damped branch (ζ ≈ −2.1 −
+0.20i) rather than the ITG branch — with the density IC the ITG-branch
+residue is tiny there; the fitted point is a real feature of the
+initial-value evolution, not a solver artifact.</p>
+<h3
+id="botfiguresfig_slab_itg_timedomain.png-driver-botfigsfig_slab_itg_timedomain.py"><code>bot/figures/fig_slab_itg_timedomain.png</code>
+(driver <code>bot/figs/fig_slab_itg_timedomain.py</code>)</h3>
+<p>|ñ_i/n0|(t) at η = 2.5, 3.5, 4.5, 6.0, common density IC, with
+exp(γ_kin t) guides. Data:
+<code>bot/runs/slab_itg_timedomain.npz</code>.</p>
+<ul>
+<li>Kinetic and HP-fluid traces overlay through the initial transient
+and the asymptotic phase; the guide slope matches the kinetic trace
+exactly.</li>
+<li>η = 2.5 (stable): kinetic and HP both show the damped oscillatory
+ITG branch; direct beta decays monotonically on its own drift branch;
+direct alpha grows by 11 decades over t = 60 — a spurious instability of
+the closure, not present in the kinetic system.</li>
+<li>Above threshold the direct-alpha trace grows at roughly twice the
+kinetic rate everywhere; direct beta decays identically in every panel
+(η-independent).</li>
+</ul>
+<h2 id="takeaway">7. Takeaway</h2>
+<p>The frequency-domain Z-substitution test (<code>itg_test.py</code>)
+is not a faithful proxy for closure performance on slab ITG: (i) its R_s
+had a typo that moved the kinetic threshold from 1+√5 to 2, and (ii)
+substituting a closure’s Z approximation into R_s implicitly assumes the
+closure commutes with the gradient drive, which the driven moment
+hierarchy shows is false — the exact gradient-free closures (beta,
+alpha) fail qualitatively in the initial-value problem, while the HP
+heat-flux closure (built as a response-function approximation with the
+drive entering every moment equation exactly) performs as advertised.
+Rigorous closure tests for ITG must be run as initial-value problems on
+the driven hierarchy.</p>
+</body>
+</html>

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy.optimize import root as scipy_root
+from scipy.stats import linregress
 
 from bot.closed_loop import (
     direct_u2_evolve,
@@ -92,6 +93,22 @@ def rel_rmse(E_fluid: np.ndarray, E_ref: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.abs(E_fluid - E_ref) ** 2)) / rms_ref)
 
 
+def fit_growth_rate(t_grid: np.ndarray, E: np.ndarray, frac: float = 0.75) -> float:
+    """Late-time slope of log|E(t)|, fit over the last (1-frac) of t_grid."""
+    n = len(t_grid)
+    nh = int(frac * n)
+    mag = np.abs(E[nh:])
+    if not np.all(np.isfinite(mag)) or np.any(mag <= 0):
+        return np.nan
+    return float(linregress(t_grid[nh:], np.log(mag)).slope)
+
+
+def rel_gamma_err(g_fluid: float, g_ref: float) -> float:
+    if not np.isfinite(g_fluid) or abs(g_ref) < 1e-12:
+        return np.nan
+    return float(abs(g_fluid - g_ref) / abs(g_ref))
+
+
 def run_cell(eps: float, w: float,
              t_end: float = 80.0, n_t: int = 801,
              amp: float = AMP) -> "dict | None":
@@ -115,21 +132,25 @@ def run_cell(eps: float, w: float,
             +       w  * fluid_eigenmode_ic_n4(K, U_B, omega2, amp)
 
     a_hp = pade_coefficients(3)
+    g_ref = fit_growth_rate(t_grid, E_ref)
 
-    def _safe_rmse(E_fn, *args):
+    def _safe(E_fn, *args, **kwargs):
         try:
-            E = E_fn(*args)
+            E = E_fn(*args, **kwargs)
             if len(E) != n_t:
-                return np.nan
-            return rel_rmse(E, E_ref)
+                return np.nan, np.nan
+            return rel_rmse(E, E_ref), rel_gamma_err(fit_growth_rate(t_grid, E), g_ref)
         except Exception:
-            return np.nan
+            return np.nan, np.nan
 
-    err_dir = _safe_rmse(direct_u2_evolve, K, U_B, eps, t_grid, ic_u2)
-    err_hp  = _safe_rmse(pade_evolve,      K, U_B, eps, a_hp, t_grid, ic_u3)
-    err_nn  = _safe_rmse(nn_n4_evolve,     K, U_B, eps, _NN_MODEL, t_grid, ic_n4)
+    err_dir, err_dir_gamma = _safe(direct_u2_evolve, K, U_B, eps, t_grid, ic_u2)
+    err_hp,  err_hp_gamma  = _safe(pade_evolve,      K, U_B, eps, a_hp, t_grid, ic_u3,
+                                   method="rk45")
+    err_nn,  err_nn_gamma  = _safe(nn_n4_evolve,     K, U_B, eps, _NN_MODEL, t_grid, ic_n4)
 
     return {"err_dir": err_dir, "err_hp": err_hp, "err_nn": err_nn,
+            "err_dir_gamma": err_dir_gamma, "err_hp_gamma": err_hp_gamma,
+            "err_nn_gamma": err_nn_gamma,
             "omega1": omega1, "omega2": omega2}
 
 
@@ -141,6 +162,9 @@ def run_grid(eps_vals: np.ndarray, w_vals: np.ndarray) -> dict:
     err_dir = np.full(shape, np.nan)
     err_hp  = np.full(shape, np.nan)
     err_nn  = np.full(shape, np.nan)
+    err_dir_gamma = np.full(shape, np.nan)
+    err_hp_gamma  = np.full(shape, np.nan)
+    err_nn_gamma  = np.full(shape, np.nan)
 
     for i, eps in enumerate(eps_vals):
         for j, w in enumerate(w_vals):
@@ -152,11 +176,16 @@ def run_grid(eps_vals: np.ndarray, w_vals: np.ndarray) -> dict:
                 err_dir[i, j] = r["err_dir"]
                 err_hp[i, j]  = r["err_hp"]
                 err_nn[i, j]  = r["err_nn"]
+                err_dir_gamma[i, j] = r["err_dir_gamma"]
+                err_hp_gamma[i, j]  = r["err_hp_gamma"]
+                err_nn_gamma[i, j]  = r["err_nn_gamma"]
             except Exception as e:
                 print(f"  [eps={eps:.3f}, w={w:.2f}]  FAIL: {e}")
         print(f"eps={eps:.3f}  done")
 
     return {"err_dir": err_dir, "err_hp": err_hp, "err_nn": err_nn,
+            "err_dir_gamma": err_dir_gamma, "err_hp_gamma": err_hp_gamma,
+            "err_nn_gamma": err_nn_gamma,
             "eps_vals": eps_vals, "w_vals": w_vals}
 
 
@@ -190,10 +219,13 @@ if __name__ == "__main__":
     np.savez_compressed(out, **save_dict)
     print(f"\nsaved {out}")
 
-    for label, key in [("Direct β", "err_dir"), ("N=4 NN super", "err_nn"), ("HP N=3", "err_hp")]:
+    for label, key in [("Direct β", "err_dir"), ("N=4 NN super", "err_nn"), ("HP N=3", "err_hp"),
+                       ("Direct β (gamma-only)", "err_dir_gamma"),
+                       ("N=4 NN super (gamma-only)", "err_nn_gamma"),
+                       ("HP N=3 (gamma-only)", "err_hp_gamma")]:
         errs = results[key]
         log_errs = np.where(errs > 0, np.log10(errs), np.nan)
-        print(f"\n{label}  log₁₀(rel RMSE), rows=eps, cols=w:")
+        print(f"\n{label}  log₁₀(rel error), rows=eps, cols=w:")
         header = "  eps\\w  " + "  ".join(f"{wv:.1f}" for wv in w_vals)
         print(header)
         for i, ep in enumerate(eps_vals):

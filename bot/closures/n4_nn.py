@@ -151,14 +151,22 @@ def make_dataset_n4_superpositions(
     where alpha_0 = 1, alpha_1 = xi, alpha_2 = beta(xi), alpha_3 = alpha(xi).
 
     The complex weight w is parametrised via the amplitude ratio
-        a = g_2/g_1,   log|a| ~ Uniform(-1.5, 1.5),   arg(a) ~ Uniform(0, 2pi)
+        a = g_2/g_1,   log|a| ~ Uniform(-6.0, 6.0),   arg(a) ~ Uniform(0, 2pi)
         w = a / (1 + a)
 
     This covers:
     * Real w near 0.5 -- the equal-amplitude chord test
     * Complex w with varying phase -- the physical time-evolution case, where
       the two-mode amplitudes acquire complex relative phases as they propagate
-    * A broad range of amplitude ratios (1/4.5 to 4.5)
+    * A broad range of amplitude ratios (~1/400 to ~400), reaching w within
+      ~0.0025 of the single-mode limits 0 and 1.  This matters because a
+      two-mode IC with one growing and one damped mode drifts toward an
+      extreme amplitude ratio as it evolves in time -- even a mild initial
+      mixing weight becomes near-single-mode after enough e-foldings.  The
+      previous range (log|a| ~ Uniform(-1.5, 1.5), w in ~[0.18, 0.82]) left
+      exactly this late-time/near-pure regime out of training, causing the
+      NN to extrapolate badly there (observed as O(1) growing-regime sweep
+      errors at the w->1 edge in fig_twomode_sweep_growing_gamma.png).
 
     The map (r_1, r_2, r_3) -> alpha4 is well-defined (unique) for this data
     because we have 6 real equations for 6 real unknowns at N=4.  Training
@@ -183,7 +191,7 @@ def make_dataset_n4_superpositions(
     xi2 = re2 + 1j * im2
 
     # Complex mixing weight via amplitude ratio a = g2/g1
-    log_abs_a = rng.uniform(-1.5, 1.5, size=batch)
+    log_abs_a = rng.uniform(-6.0, 6.0, size=batch)
     phi       = rng.uniform(0, 2 * np.pi, size=batch)
     a = np.exp(log_abs_a) * np.exp(1j * phi)
     w = a / (1 + a)   # complex weight: both |w| and |1-w| are bounded
@@ -241,6 +249,13 @@ def make_dataset_n4_real_chord(
     accumulate relative phase; real w covers the t=0 state and the
     static chord-test figure.
 
+    w is parametrised the same way as make_dataset_n4_superpositions but
+    with a real (rather than complex) amplitude ratio:
+        a = g_2/g_1 > 0,   log(a) ~ Uniform(-6.0, 6.0),   w = a / (1 + a)
+    reaching within ~0.0025 of the single-mode limits w=0, 1, so the
+    near-pure-mode regime (relevant once a two-mode IC has evolved for many
+    e-foldings and one mode dominates) is represented in training.
+
     The real-chord data is combined with complex-w data in
     make_dataset_n4_combined to ensure broad coverage.
     """
@@ -255,8 +270,10 @@ def make_dataset_n4_real_chord(
     im2 = rng.uniform(*xi_im_range, size=batch)
     xi1 = re1 + 1j * im1
     xi2 = re2 + 1j * im2
-    # Real w uniformly in (0.02, 0.98) — avoid single-mode limits
-    w_vals = rng.uniform(0.02, 0.98, size=batch)
+    # Real amplitude ratio a = g2/g1 > 0, log-uniform to reach near w=0,1
+    log_a  = rng.uniform(-6.0, 6.0, size=batch)
+    a_real = np.exp(log_a)
+    w_vals = a_real / (1.0 + a_real)
 
     for i in range(batch):
         if abs(xi1[i] - xi2[i]) < 0.15:

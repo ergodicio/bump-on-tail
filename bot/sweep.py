@@ -22,17 +22,31 @@ from bot.kinetic import most_unstable_kinetic
 
 def kinetic_peak(u_b: float, eps: float,
                  k_lo: float = 0.10, k_hi: float = 1.20, n_k: int = 80,
-                 N_v: int = 96, V: float = 6.0
+                 N_v: int = 96, V: float = 6.0, omega_re_hi: float = 1.5
                  ) -> tuple[np.ndarray, np.ndarray, int]:
     """Scan k via s-space eigenvalue solver; return (ks, omega(k), peak idx).
 
     For each k pick the most-unstable Langmuir-like mode in Re(omega) in
-    [0.3, 3.0]. Robust across the (u_b, eps) grid.
+    [0.3, omega_re_hi].  omega_re_hi defaults to 1.5, not the wider 3.0 used
+    prior to this fix: at some (u_b, eps, k) -- verified at u_b=7,
+    k~0.34-0.38 -- a window that wide lets in a numerically-spurious
+    high-frequency branch (Re(omega)~3.0-3.05) that outgrows the true
+    fundamental Langmuir mode (Re(omega) stays ~0.7-1.05 across every
+    (u_b, eps) checked in this module), corrupting the reported k* and
+    omega there (e.g. the ~38%/~400% outlier cells this produced in
+    fig_hp_beta_sweep.png before this fix, and propagating into any other
+    sweep that calls kinetic_peak).  A Newton-continuation alternative
+    (track one branch in k from a single seed, rather than independently
+    re-selecting "most unstable in window" at each k) was tried and
+    rejected: it fixed u_b=7 but broke other points whose true growing
+    peak does not connect smoothly back to the low-k seed (e.g.
+    u_b=3,eps=0.05 and u_b=4,eps=0.02 landed on k*=k_lo with zero growth).
     """
     ks = np.linspace(k_lo, k_hi, n_k)
     ws = np.empty(n_k, dtype=complex)
     for i, k in enumerate(ks):
-        ws[i] = most_unstable_kinetic(k, u_b, eps, N_v=N_v, V=V)
+        ws[i] = most_unstable_kinetic(k, u_b, eps, N_v=N_v, V=V,
+                                      omega_re_hi=omega_re_hi)
     i_max = int(np.argmax(ws.imag))
     return ks, ws, i_max
 

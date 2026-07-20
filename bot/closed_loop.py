@@ -52,17 +52,48 @@ def kinetic_evolve(k: float, u_b: float, eps: float,
 
 # ----- Padé time evolution (linear ODE, matrix exponential) --------------
 
+def _linear_rhs(t, y_real, A):
+    n = A.shape[0]
+    y = y_real[:n] + 1j * y_real[n:]
+    dy = A @ y
+    return np.concatenate([dy.real, dy.imag])
+
+
 def pade_evolve(k: float, u_b: float, eps: float, a: np.ndarray,
-                 t_grid: np.ndarray, y0: np.ndarray) -> np.ndarray:
-    """Return E(t) for the closed fluid system with Padé closure a."""
+                 t_grid: np.ndarray, y0: np.ndarray,
+                 method: str = "eigen",
+                 rtol: float = 1e-9, atol: float = 1e-12) -> np.ndarray:
+    """Return E(t) for the closed fluid system with Padé closure a.
+
+    method="eigen" (default): exact via eigendecomposition (matrix
+    exponential), no time-stepping error.
+    method="rk45": genuinely time-stepped via RK45, matching the numerical
+    scheme used for the nonlinear direct-beta/alpha closures (fair
+    side-by-side comparison of the transient, not just the asymptotic
+    rate).
+    """
     A = fluid_system(k, u_b, eps, a)
-    eigvals, evecs = np.linalg.eig(A)
-    coefs = np.linalg.solve(evecs, y0)
-    E_t = np.empty(len(t_grid), dtype=complex)
-    for i, ti in enumerate(t_grid):
-        y = evecs @ (coefs * np.exp(eigvals * ti))
-        E_t[i] = y[1]
-    return E_t
+    if method == "eigen":
+        eigvals, evecs = np.linalg.eig(A)
+        coefs = np.linalg.solve(evecs, y0)
+        E_t = np.empty(len(t_grid), dtype=complex)
+        for i, ti in enumerate(t_grid):
+            y = evecs @ (coefs * np.exp(eigvals * ti))
+            E_t[i] = y[1]
+        return E_t
+    elif method == "rk45":
+        n = A.shape[0]
+        y0_real = np.concatenate([y0.real, y0.imag])
+        sol = solve_ivp(_linear_rhs, (t_grid[0], t_grid[-1]), y0_real,
+                        t_eval=t_grid, args=(A,), method="RK45",
+                        rtol=rtol, atol=atol)
+        if not sol.success:
+            print(f"  pade_evolve[rk45] WARNING: {sol.message}")
+        m = len(sol.t)
+        y_complex = sol.y[:n, :m] + 1j * sol.y[n:, :m]
+        return y_complex[1]
+    else:
+        raise ValueError(f"unknown method {method!r}")
 
 
 # ----- inference time evolution (nonlinear ODE, RK45) --------------------

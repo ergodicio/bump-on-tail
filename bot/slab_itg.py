@@ -107,7 +107,7 @@ def alpha_closure(z):
 # The manifold moment ratios therefore depend on (zeta_*, eta) — the drive
 # lives inside the closure, unlike the gradient-free beta/alpha.
 
-_MAXW_M = (1.0, 0.0, 0.5, 0.0, 0.75, 0.0)   # M_0..M_5
+_MAXW_M = (1.0, 0.0, 0.5, 0.0, 0.75, 0.0, 1.875, 0.0)   # M_0..M_7
 
 
 def manifold_Un_over_phi(z, zeta_star: float, eta: float, n_max: int = 3):
@@ -302,16 +302,53 @@ def fluid_hp_modes(zeta_star: float, eta: float, tau: float = 1.0,
                                                   Gamma, chi1))
 
 
+def _linear_rhs(t, y_real, A):
+    n = A.shape[0]
+    y = y_real[:n] + 1j * y_real[n:]
+    dy = A @ y
+    return np.concatenate([dy.real, dy.imag])
+
+
+def linear_evolve_rk45(A: np.ndarray, t_grid: np.ndarray, y0: np.ndarray,
+                       rtol: float = 1e-9, atol: float = 1e-12) -> np.ndarray:
+    """RK45 time-stepping of dy/dt = A y (same physics as eigendecomposition,
+    but genuinely integrated -- for apples-to-apples comparison against a
+    nonlinear closure that has no choice but to be time-stepped)."""
+    n = A.shape[0]
+    y0_real = np.concatenate([y0.real, y0.imag])
+    sol = solve_ivp(_linear_rhs, (t_grid[0], t_grid[-1]), y0_real,
+                    t_eval=t_grid, args=(A,), method="RK45",
+                    rtol=rtol, atol=atol)
+    if not sol.success:
+        print(f"  linear_evolve_rk45 WARNING: {sol.message}")
+    m = len(sol.t)
+    return sol.y[:n, :m] + 1j * sol.y[n:, :m]
+
+
 def fluid_hp_evolve(zeta_star: float, eta: float, tau: float,
                     t_grid: np.ndarray, y0: np.ndarray,
-                    Gamma: float = 3.0, chi1: float = CHI1_HP) -> dict:
-    """Evolve the HP 3-moment system from y0 = (U_0, U_1, U_2)."""
+                    Gamma: float = 3.0, chi1: float = CHI1_HP,
+                    method: str = "eigen",
+                    rtol: float = 1e-9, atol: float = 1e-12) -> dict:
+    """Evolve the HP 3-moment system from y0 = (U_0, U_1, U_2).
+
+    method="eigen" (default): exact via eigendecomposition (matrix
+    exponential), no time-stepping error.
+    method="rk45": genuinely time-stepped, matching the numerical scheme
+    used for the nonlinear direct-beta/alpha closures (fair side-by-side
+    comparison of the transient, not just the asymptotic rate).
+    """
     A = fluid_hp_system(zeta_star, eta, tau, Gamma, chi1)
-    lam, V = np.linalg.eig(A)
-    c = np.linalg.solve(V, y0)
-    Y = np.empty((3, len(t_grid)), dtype=complex)
-    for i, t in enumerate(t_grid):
-        Y[:, i] = V @ (c * np.exp(lam * t))
+    if method == "eigen":
+        lam, V = np.linalg.eig(A)
+        c = np.linalg.solve(V, y0)
+        Y = np.empty((3, len(t_grid)), dtype=complex)
+        for i, t in enumerate(t_grid):
+            Y[:, i] = V @ (c * np.exp(lam * t))
+    elif method == "rk45":
+        Y = linear_evolve_rk45(A, t_grid, y0, rtol=rtol, atol=atol)
+    else:
+        raise ValueError(f"unknown method {method!r}")
     return {"t": t_grid, "U0": Y[0], "U1": Y[1], "U2": Y[2],
             "phi": Y[0] / tau}
 
