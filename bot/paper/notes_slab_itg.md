@@ -498,3 +498,192 @@ response error in γ); for a *direct/nonlinear* closure the thing to certify
 is the prefactor polynomial P_N (then the response is free and the only risk
 is spurious prefactor zeros).  β_itg at N=2 and HP Γ=3 each pass their
 respective certificate; α_itg at N=3 and Γ=5/3 each fail theirs.
+
+## 11. AAA rational approximation: a learned/fit alternative to HP's closure
+
+(Single-eigenmode test driver `bot/figs/fig_slab_itg_landau_singlemode.py`,
+figure `bot/figures/fig_slab_itg_landau_singlemode.png`; closure code
+`bot.closures.pade.aaa_coefficients_n4` and `bot.closures.aaa_pad`.)
+
+### 11.1 Motivation
+
+§10 explains *why* HP gets a genuinely wrong damping rate away from
+marginality: its 3-pole closure is derived by matching only two points —
+the large-|ζ| asymptotic expansion of Z′(ζ) and the small-ζ Taylor value/
+slope at ζ = 0 — with nothing constraining the fit in between.  Checked
+directly on a below-threshold Landau-damped root (ζ_* = 1, τ = 1, η = 2,
+ζ_root = −2.190 − 0.192i, found via the new `min_damped_root` — the
+mirror image of `max_growing_root`, searching the lower half-plane): HP's
+rational R(ζ) is 23–68% off from the exact Z′(ζ) at the ζ values relevant
+to this session's benchmark modes, only dropping to a few percent once
+|ζ| ≳ 4–6.  `scipy.interpolate.AAA` (SciPy ≥ 1.15) replaces the two-point
+match with a genuine data fit over a domain, so the natural question is
+whether a higher-order, AAA-derived closure closes that gap.
+
+### 11.2 First attempt: AAA folded into the existing N-moment closure family
+
+The direct approach is to stay inside the same closure family HP already
+uses — `U_N = Σ_i a_i U_i`, generalized from N=3 to N=4 — and choose the
+four complex coefficients `a` by fitting, rather than by two-point
+matching.  `scipy.interpolate.AAA` fit to Z′(ξ) along the real axis
+(ξ ∈ [−6, 6]; a 2D complex-plane fit was tried first but fails badly —
+Z′(ζ) grows ~exponentially as Im(ζ) → −∞, e.g. |Z′| ~ 4.5×10⁻² at ζ=4 vs
+~9×10³ at ζ=−2.5i, so AAA's greedy absolute-error point selection is
+completely dominated by the large-magnitude corner and ignores the O(1)
+region entirely) gives an excellent fit: ~1–5% relative error at the
+session's benchmark ζ values, vs HP's 23–68% there.
+
+That accuracy does **not** carry over when forced into the `a_i` family,
+and the reason is structural, not a fitting failure: `fluid_U0(ξ; a)` (the
+closure's own implied response) has only N complex degrees of freedom,
+while a general rational function with N poles needs 2N−1 (poles *and*
+residues both free — the residues are *not* independently choosable here,
+they're fixed once the poles are fixed by the physical moment recursion).
+Two independent checks confirm the cap:
+
+- Setting the closure's own characteristic-polynomial roots equal to
+  AAA's fitted poles (elementary symmetric functions of the poles) gives
+  ~20–25% error at the benchmark ζ values — no better than HP.
+- Building the physically-implied weights from those same poles via the
+  dressed-pole basis (`bot.closures.dressed_pole.basis_moments`) gives the
+  same ~20–25%, confirming it's the family, not the matching method.
+
+A direct nonlinear least-squares fit of `a_0..a_3` (not constrained to
+interpolate any particular points) against Z′(ξ) on the real axis —
+`scipy.optimize.least_squares`, `'lm'`, HP-extended initial guess with
+random restarts — gets much closer to what the family can actually
+achieve: median 1.6% error on-axis (matching AAA there), 6–21% at the
+session's off-axis complex test points (vs HP's 23–68% at the same
+points).  This is `aaa_coefficients_n4()` in `bot/closures/pade.py`,
+usable as a drop-in `a` for both `bot.fluid.fluid_system` (BoT) and the
+new `bot.slab_itg.fluid_pade_system`/`fluid_pade_evolve` (the N-moment
+generalization of `fluid_hp_system`, verified byte-identical to it when
+fed HP's own coefficients).  On the ζ_root = −2.190−0.192i single-mode
+benchmark it visibly tracks the true decay far more closely than HP
+throughout a 30-time-unit window, but with a real, bounded residual bias
+(amplitude ratio to truth settles in [0.28, 0.86], vs HP's drifting from
+1.4 to 2.9) — a genuine improvement, not a solved problem.
+
+### 11.3 M4′: fixed multi-pole state-space closure (the real fix)
+
+The cap in §11.2 is the moment-ladder closure *form*, not AAA.  Getting
+AAA's actual accuracy requires leaving that form: represent the response
+as an explicit sum of poles with independently-fit residues, realized as
+auxiliary linear ODE state — one "pad" variable per pole — rather than as
+a static `Σ a_i U_i` relation.  (This is "M4′" in
+`dressed_pole_closure_handoff.md`'s post-M3′ addendum; M3′, the amortized-
+NN pole-inversion scheme from the same document, was tried earlier this
+session and found impractical — RHS roughness from the fit/gate/fallback
+machinery defeated the adaptive integrator, 1.7M RHS evaluations for a
+short window and still not converged.  M4′ replaces "fit poles every
+step" with "fit poles once, offline," which sidesteps that failure mode
+entirely: no runtime optimizer, no gates, no adaptive integrator.)
+
+**Construction** (`bot/closures/aaa_pad.py`).  Because ITG quasineutrality
+is algebraic (φ = U₀/τ, no separate field equation), the pad alone is a
+complete closed system — no separate U₁, U₂, U₃ needed.  For a set of
+poles {p_j} and residues {c_j} with U₀/φ ≈ Σ_j c_j/(ζ−p_j):
+
+    dw_j/dt = −i p_j w_j − i c_j φ,      U_0 = Σ_j w_j,      φ = U_0/τ
+
+which is linear and time-invariant, so it propagates by matrix
+exponential — no RK45, no per-step evaluation at all.
+
+Two design choices, both following the handoff doc:
+
+1. **What to fit.**  The doc's *preferred* option is to fit the universal,
+   drive-independent Z′(ζ) and append the pad only to the *tail* of a
+   truncated physical moment ladder ("coupled to the chain end"), keeping
+   the ζ_*/η drive in the explicit lower-moment source terms exactly as
+   HP does.  That requires deriving how the pad couples back into a
+   partially-retained ladder and was not completed this session.  Instead
+   the *fallback* option was used: fit AAA directly to this problem's own
+   U_0/φ = −R_kinetic(ζ; ζ_*, η) (drive baked into the fit).  The pad is
+   then a complete standalone closure for that one (ζ_*, η), not reusable
+   across a parameter scan without refitting — acceptable since the fit
+   itself is cheap (~0.18 s for 15 poles), matching the doc's own note
+   that per-background refitting is "milliseconds."
+2. **Pole check.**  AAA does not know about causality — a pole with
+   Im(p_j) ≥ 0 would make an undriven pad mode spontaneously grow, which
+   is unphysical for a linear response of a stable Maxwellian background.
+   `fit_aaa_pad_itg` checks this after every fit and, if needed, discards
+   offending poles and re-solves the residues by linear least squares on
+   the retained set.  For ζ_* = 1, τ = 1, η = 2 (`max_terms=21`): AAA
+   converges to 15 poles, all with Im(p_j) ∈ [−2.47, −2.36] — comfortably
+   inside the lower half-plane, nothing pruned.
+
+**Accuracy.**  Static fit quality: ~machine precision (relative error
+~10⁻¹³–10⁻¹² over the real-axis validation grid *and* at ζ_root itself —
+unsurprising given 15 poles fit a function whose magnitude only varies
+over roughly a factor of 10 along the real axis for this (ζ_*, η), unlike
+the earlier universal-Z′ 2D-domain attempt).  Time-domain, same single-
+eigenmode benchmark as §11.2: the amplitude ratio to the true kinetic
+decay stays in [1.0000, 1.0002] for the entire 30-time-unit window —
+three to four orders of magnitude closer to truth than either HP or the
+N=4 moment-ladder fit.
+
+**IC construction.**  `aaa_pad_ic` sets `w_j(0) = c_j·amp/(ζ_0 − p_j)`,
+i.e. the pad's own steady-state response to a hypothetical continuous
+forcing at frequency ζ_0 — the natural, well-defined way to ask "what
+does this pad think a pure mode at ζ_0 looks like," giving
+`U_0(0) = amp · (AAA fit of U_0/φ at ζ_0)`, accurate to the fit's own
+error at that point (here, machine precision).
+
+### 11.4 Summary
+
+| closure | dof vs. target | fit domain | error at ζ_root = −2.190−0.192i (t=0→30) |
+|---|---|---|---|
+| HP (Γ=3) | 3 complex, 2-point matched | ζ=0 Taylor + ζ→∞ asymptotic | ratio to truth drifts 1.4 → 2.9 |
+| AAA N=4 (least-squares, §11.2) | 4 complex, moment-ladder-constrained | real axis, Z′(ξ) | ratio settles in [0.28, 0.86] |
+| AAA pad (M4′, §11.3) | 15 complex poles, unconstrained (state-space) | real axis, −R_kinetic(ζ;ζ_*,η) | ratio in [1.0000, 1.0002] |
+
+The moment-ladder closure family (HP's own form, and its N=4 extension)
+is fundamentally dof-limited regardless of how well its coefficients are
+fit; the fixed-pole state-space realization removes that ceiling entirely
+and — for a single benchmark eigenmode — reproduces the kinetic decay to
+the AAA fit's own tolerance.  Not yet run: the fuller M4′ "gauntlet" from
+the handoff doc (two-mode beat, the generic-IC case that previously hung
+M3-pre, wall-clock/RHS-eval accounting vs. M3′), and the doc's preferred
+option A (universal-Z′ closure with the pad appended only to a truncated
+ladder, reusable across (ζ_*, η) without refitting).
+
+### 11.5 Limitation: generic (non-eigenmode) ICs are not yet representable
+
+(Driver `bot/figs/fig_slab_itg_aaa_pad_eigenmode.py`, figure
+`bot/figures/fig_slab_itg_aaa_pad_eigenmode.png`.)
+
+§11.3's pad tracks only U₀ — there is no separate U₁, U₂ state — because
+ITG quasineutrality only ever needs U₀.  That is fine for a single-
+eigenmode IC (§11.3), but it means the pad has no way to encode an IC
+where U₁, U₂ are specified independently of U₀, e.g. the generic
+density-only IC (`density_ic_fluid`/`density_ic_kinetic`: U₀=amp, U₁=0,
+U₂=amp/2) used throughout `fig_bot_vs_itg_closures.py` — including its
+ITG-1 case (ζ_*=1, τ=1, η=10), the same case redone here on an eigenmode
+IC instead, since that is what the current pad can actually do.
+
+A first attempt at fixing this — retain the physical U₀, U₁, U₂ ladder
+with its exact σ_n-driven dynamics unchanged, and close U₃ at every step
+by a fixed-pole least-squares projection onto the ITG-driven manifold
+basis (`manifold_Un_over_phi` at the same 14 AAA poles, not the
+gradient-free `basis_moments`) — **fails badly** on the density IC: with
+14 poles and only 3 retained moments the per-step weight solve is
+underdetermined, `np.linalg.lstsq`'s minimum-norm solution is not
+physically meaningful, and the resulting U₃ instantly overdamps the state
+(fitted γ comes out **negative** — wrong sign — vs. the true γ=+0.775;
+`bot.closures.aaa_pad.aaa_pad_ladder_evolve`, kept for the record but not
+used in any figure).  This is not simply a bug to fix with better
+regularization: the density IC has genuine continuum/non-pole content (a
+smooth F₀-shaped velocity perturbation is not a finite sum of simple
+poles), which is exactly the "remainder channel" the original handoff
+doc flags as a separate, harder, stretch-goal problem (M5) — no finite-
+pole closure, fit however well, represents it exactly.  Properly closing
+this gap needs either the doc's preferred option A done correctly (pad
+coupled to the chain end, not a per-step re-projection of the whole
+state) or an explicit remainder/continuum channel; neither is done here.
+
+On the eigenmode IC (ζ_root = 0.7839+0.7747i, same ζ_*, τ, η as ITG-1):
+AAA pad and direct-β both track the true growing rate to within
+plotting/fit precision throughout t=0→25 (25 e-foldings, amplitude
+growing five orders of magnitude), while HP's ~9.7% low growth-rate error
+compounds into roughly two orders of magnitude of amplitude error by the
+end of the window — visually obvious on the semilog plot.

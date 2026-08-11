@@ -54,13 +54,14 @@ def _fit_gamma(t, E, t_fit_min=25.0):
     return float(slope)
 
 
-def _log_heatmap(ax, over_frac, extent, title, mark=True):
+def _log_heatmap(ax, over_frac, extent, title, mark=True,
+                  vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX):
     z = np.log10(np.maximum(np.abs(over_frac), 1e-6))
     im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
-                   cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX)
+                   cmap=LOG_OVER_CMAP, vmin=vmin, vmax=vmax)
     ax.set_title(title)
     ax.set_xlabel(r"$\varepsilon = n_b/n_0$")
-    ax.set_ylabel(r"$u_b/v_b$")
+    ax.set_ylabel(r"$u_b/v_{tb}$")
     if mark:
         ax.scatter([0.05], [5.0], c="white", s=60, marker="x", linewidths=2)
         ax.scatter([0.05], [5.0], c="black", s=20, marker="x", linewidths=1.5)
@@ -1195,7 +1196,8 @@ def fig_u2_landau_twomode(nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") 
 
 
 def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
-                               amp=1e-3, t_end=60.0) -> None:
+                               amp=1e-3, t_end=60.0,
+                               legend_loc="lower left") -> None:
     """Shared single-panel plotting logic for fig_u2_landau_twomode_single.
 
     y-limits are clipped to the actual finite data range (plus a small
@@ -1232,42 +1234,65 @@ def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
     y0_n4 = (fluid_eigenmode_ic_n4(k, u_b, omega1, amp=amp) +
              fluid_eigenmode_ic_n4(k, u_b, omega2, amp=amp))
 
+    # The same seven closures as fig_opt_hunana_sweep (PANELS there), evolved
+    # from the identical two-mode superposition IC: four linear Hunana-family
+    # closures (HP N=3, opt N=3, two-point N=4, opt N=4) via pade_evolve, plus
+    # the three nonlinear closures (EKR N=2, naive NN N=3, super NN N=4).
+    from bot.closures.opt_hunana import opt_coefficients
+    from bot.closures.pade import two_point_coefficients
+    from bot.closures.naive_nn import load as load_naive
+    from bot.closed_loop import naive_evolve
+
     E_dir2 = _pad(direct_u2_evolve(k, u_b, eps, t_grid, y0_u2))
     E_nn4s = _pad(nn_n4_evolve(k, u_b, eps, model_n4_super, t_grid, y0_n4))
+    E_nn3  = _pad(naive_evolve(k, u_b, eps, load_naive(), t_grid, y0_u3))
     E_pade = _pad(pade_evolve(k, u_b, eps, a_hp, t_grid, y0_u3, method="rk45"))
+    E_opt3 = _pad(pade_evolve(k, u_b, eps, opt_coefficients(3), t_grid, y0_u3,
+                              method="rk45"))
+    E_hun4 = _pad(pade_evolve(k, u_b, eps, two_point_coefficients(4, 2),
+                              t_grid, y0_n4, method="rk45"))
+    E_opt4 = _pad(pade_evolve(k, u_b, eps, opt_coefficients(4), t_grid, y0_n4,
+                              method="rk45"))
 
-    ax.semilogy(t_grid, E_m1, color="0.70", lw=1.0, ls="--", zorder=1,
-                label=fr"$e^{{\gamma_1 t}}$, $\gamma_1={gamma1:.3f}$")
-    ax.semilogy(t_grid, E_m2, color="0.50", lw=1.0, ls=":", zorder=1,
-                label=fr"$e^{{\gamma_2 t}}$, $\gamma_2={gamma2:.3f}$")
-    ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=6,
-                label=r"$|e^{-i\omega_1 t}+e^{-i\omega_2 t}|$ (analytic)")
+    print(f"twomode {title}: u_b={u_b:g}, k={k:g}, eps={eps:g}, "
+          f"omega1={omega1:.3f} (xi_b1={xi_b1:.3f}), "
+          f"omega2={omega2:.3f} (xi_b2={xi_b2:.3f})")
+
+    ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=8,
+                label="Kinetic ground truth")
+    ax.semilogy(t_grid, np.abs(E_pade), color="C0", lw=1.2, ls=":", zorder=2,
+                alpha=0.9, label=r"Hammett-Perkins ($N=3$)")
+    ax.semilogy(t_grid, np.abs(E_hun4), color="C4", lw=1.2, ls=":", zorder=3,
+                alpha=0.9, label=r"Hunana ($N=4$)")
+    ax.semilogy(t_grid, np.abs(E_opt3), color="C2", lw=1.2, ls="-.", zorder=2,
+                alpha=0.9, label=r"Padé opt ($N=3$)")
+    ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=1.2, ls="-.", zorder=3,
+                alpha=0.9, label=r"Padé opt ($N=4$)")
     ax.semilogy(t_grid, np.abs(E_dir2), color="C1", lw=1.5, ls="--", zorder=4,
-                label=r"Direct $\beta$, N=2")
+                label=r"EKR ($N=2$)")
+    ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=1.2, ls="-", zorder=4,
+                alpha=0.9, label=r"NN ($N=3$)")
     ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=2.0, ls="-", zorder=5,
-                label=r"NN$^{\rm super}(r_1,r_2,r_3)$, N=4")
-    ax.semilogy(t_grid, np.abs(E_pade), color="C0", lw=1.0, ls=":", zorder=2,
-                alpha=0.8, label="HP N=3 (RK45)")
+                label=r"NN ($N=4$)")
 
     # Clip y-axis to the actual data range (bottom: finite-value floor of
     # the reference/closure traces; top: just above the initial amplitude).
-    finite_traces = [np.abs(E_ref), np.abs(E_dir2), np.abs(E_nn4s), np.abs(E_pade)]
+    finite_traces = [np.abs(E_ref), np.abs(E_dir2), np.abs(E_nn4s),
+                     np.abs(E_nn3), np.abs(E_pade), np.abs(E_opt3),
+                     np.abs(E_hun4), np.abs(E_opt4)]
     all_vals = np.concatenate(finite_traces)
     all_vals = all_vals[np.isfinite(all_vals) & (all_vals > 0)]
     ylo = 10 ** (np.floor(np.log10(all_vals.min())) - 0.5)
     yhi = 10 ** (np.ceil(np.log10(all_vals.max())) + 0.2)
 
-    ax.set_title(
-        title + fr",  $\varepsilon={eps}$" + "\n"
-        + fr"$\omega_1={omega1:.3f}$  ($\xi_{{b1}}={xi_b1:.3f}$),  "
-        + fr"$\omega_2={omega2:.3f}$  ($\xi_{{b2}}={xi_b2:.3f}$)",
-        fontsize=9.5,
-    )
+    ax.set_title(title)
     ax.set_xlim(0, t_end)
     ax.set_ylim(bottom=ylo, top=yhi)
-    ax.set_xlabel(r"$t\;[\omega_p^{-1}]$")
-    ax.set_ylabel(r"$|E(t)|$")
-    ax.legend(fontsize=7.5, loc="upper right")
+    ax.set_xlabel(r"$t\,\omega_{pe}$")
+    ax.set_ylabel(r"$|E|$")
+    if legend_loc:
+        ax.legend(fontsize=10, loc=legend_loc, labelspacing=0.3,
+                  handlelength=1.8, borderpad=0.3)
 
 
 def fig_u2_landau_twomode_single(
@@ -1285,24 +1310,33 @@ def fig_u2_landau_twomode_single(
     model_n4_super = load_n4_super()
     a_hp = pade_coefficients(3)
 
+    import matplotlib as mpl
+
     cases = [
-        (1.0, 0.50, 0.05, r"$u_b{=}1.0,\;k{=}0.50$"),
-        (1.5, 0.40, 0.05, r"$u_b{=}1.5,\;k{=}0.40$"),
+        (1.0, 0.50, 0.05, "(a)"),
+        (1.5, 0.40, 0.05, "(b)"),
     ]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
-    for ax, (u_b, k, eps, title) in zip(axes, cases):
-        _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp)
+    # Computer Modern (LaTeX-style) fonts to match the other paper figures.
+    with mpl.rc_context({"font.family": "serif", "mathtext.fontset": "cm",
+                         "font.size": 16, "axes.titlesize": 16}):
+        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
+        for i, (ax, (u_b, k, eps, title)) in enumerate(zip(axes, cases)):
+            _plot_landau_twomode_case(ax, u_b, k, eps, title,
+                                      model_n4_super, a_hp,
+                                      legend_loc="lower left" if i == 0
+                                      else None)
 
-    fig.tight_layout()
-    out = FIG_DIR / "fig_u2_landau_twomode_single.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
-    print(f"saved {out}")
-    plt.close(fig)
+        fig.tight_layout()
+        out = FIG_DIR / "fig_u2_landau_twomode_single.png"
+        fig.savefig(out, dpi=150, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
 
 
 def _plot_landau_singlemode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
-                                  amp=1e-3, t_end=60.0) -> None:
+                                  amp=1e-3, t_end=60.0,
+                                  legend_loc="lower left") -> None:
     """Single-eigenmode counterpart of _plot_landau_twomode_case.
 
     IC = a single kinetic eigenmode (the most-damped Landau root at this
@@ -1344,14 +1378,17 @@ def _plot_landau_singlemode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
     E_nn4s = _pad(nn_n4_evolve(k, u_b, eps, model_n4_super, t_grid, y0_n4))
     E_pade = _pad(pade_evolve(k, u_b, eps, a_hp, t_grid, y0_u3, method="rk45"))
 
+    print(f"singlemode {title}: u_b={u_b:g}, k={k:g}, eps={eps:g}, "
+          f"omega1={omega1:.3f} (xi_b1={xi_b1:.3f}, gamma1={gamma1:.4f})")
+
     ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=6,
-                label=r"$|e^{-i\omega_1 t}|$ (exact single mode)")
+                label="Kinetic ground truth")
     ax.semilogy(t_grid, np.abs(E_dir2), color="C1", lw=1.5, ls="--", zorder=4,
-                label=r"Direct $\beta$, N=2")
+                label=r"EKR ($N=2$)")
     ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=2.0, ls="-", zorder=5,
-                label=r"NN$^{\rm super}(r_1,r_2,r_3)$, N=4")
+                label=r"NN ($N=4$)")
     ax.semilogy(t_grid, np.abs(E_pade), color="C0", lw=1.0, ls=":", zorder=2,
-                alpha=0.8, label="HP N=3 (RK45)")
+                alpha=0.8, label=r"Hammett-Perkins ($N=3$)")
 
     finite_traces = [np.abs(E_ref), np.abs(E_dir2), np.abs(E_nn4s), np.abs(E_pade)]
     all_vals = np.concatenate(finite_traces)
@@ -1359,16 +1396,14 @@ def _plot_landau_singlemode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
     ylo = 10 ** (np.floor(np.log10(all_vals.min())) - 0.5)
     yhi = 10 ** (np.ceil(np.log10(all_vals.max())) + 0.2)
 
-    ax.set_title(
-        title + fr",  $\varepsilon={eps}$" + "\n"
-        + fr"$\omega_1={omega1:.3f}$  ($\xi_{{b1}}={xi_b1:.3f}$),  $\gamma_1={gamma1:.4f}$",
-        fontsize=9.5,
-    )
+    ax.set_title(title)
     ax.set_xlim(0, t_end)
     ax.set_ylim(bottom=ylo, top=yhi)
-    ax.set_xlabel(r"$t\;[\omega_p^{-1}]$")
-    ax.set_ylabel(r"$|E(t)|$")
-    ax.legend(fontsize=7.5, loc="upper right")
+    ax.set_xlabel(r"$t\,\omega_{pe}$")
+    ax.set_ylabel(r"$|E|$")
+    if legend_loc:
+        ax.legend(fontsize=10, loc=legend_loc, labelspacing=0.3,
+                  handlelength=1.8, borderpad=0.3)
 
 
 def fig_u2_landau_singlemode(
@@ -1385,20 +1420,28 @@ def fig_u2_landau_singlemode(
     model_n4_super = load_n4_super()
     a_hp = pade_coefficients(3)
 
+    import matplotlib as mpl
+
     cases = [
-        (1.0, 0.50, 0.05, r"$u_b{=}1.0,\;k{=}0.50$"),
-        (1.5, 0.40, 0.05, r"$u_b{=}1.5,\;k{=}0.40$"),
+        (1.0, 0.50, 0.05, "(a)"),
+        (1.5, 0.40, 0.05, "(b)"),
     ]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
-    for ax, (u_b, k, eps, title) in zip(axes, cases):
-        _plot_landau_singlemode_case(ax, u_b, k, eps, title, model_n4_super, a_hp)
+    # Computer Modern (LaTeX-style) fonts to match the other paper figures.
+    with mpl.rc_context({"font.family": "serif", "mathtext.fontset": "cm",
+                         "font.size": 16, "axes.titlesize": 16}):
+        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
+        for i, (ax, (u_b, k, eps, title)) in enumerate(zip(axes, cases)):
+            _plot_landau_singlemode_case(ax, u_b, k, eps, title,
+                                         model_n4_super, a_hp,
+                                         legend_loc="lower left" if i == 0
+                                         else None)
 
-    fig.tight_layout()
-    out = FIG_DIR / "fig_u2_landau_singlemode.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
-    print(f"saved {out}")
-    plt.close(fig)
+        fig.tight_layout()
+        out = FIG_DIR / "fig_u2_landau_singlemode.png"
+        fig.savefig(out, dpi=150, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -1406,24 +1449,45 @@ def fig_u2_landau_singlemode(
 # ---------------------------------------------------------------------------
 
 def fig_hp_beta_sweep(path: Path = RUN_DIR / "sweep_hp_beta.npz") -> None:
-    """Log10|γ_eff/γ_kin − 1| heatmaps: HP Padé N=3 vs Direct β (N=2)."""
+    """Log10|γ_eff/γ_kin − 1| heatmaps: HP Padé N=3 vs EKR (N=2)."""
+    import matplotlib as mpl
+
     d = np.load(path)
     u_b = d["u_b_vals"]; eps = d["eps_vals"]
     over_hp  = d["overshoot_hp"]
     over_dir = d["overshoot_direct"]
     extent = [eps[0], eps[-1], u_b[0], u_b[-1]]
 
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
-    _log_heatmap(axes[0], over_hp,  extent, r"HP Padé $N=3$  (Hammett-Perkins)",
-                mark=False)
-    im = _log_heatmap(axes[1], over_dir, extent, r"Direct $\beta$ closure  ($N=2$)",
-                      mark=False)
-    fig.tight_layout()
-    _add_colorbar(fig, im)
-    out = FIG_DIR / "fig_hp_beta_sweep.png"
-    fig.savefig(out, dpi=120, bbox_inches="tight")
-    print(f"saved {out}")
-    plt.close(fig)
+    # Truncated scale: data spans log10 in [-7.0, -1.1], well inside the
+    # shared [-4, 1] convention used elsewhere -- narrow to [-4, -1] so the
+    # actual spread uses the full color range (see fig_hp_beta_sweep_abs,
+    # same rationale).
+    vmin, vmax = -4.0, -1.0
+
+    # Computer Modern (LaTeX-style) fonts to match the paper's other figures;
+    # mathtext 'cm' rather than usetex so no external latex install is needed.
+    with mpl.rc_context({"font.family": "serif",
+                         "mathtext.fontset": "cm",
+                         "font.size": 7,
+                         "axes.titlesize": 7}):
+        fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9))
+        _log_heatmap(axes[0], over_hp,  extent, r"HP ($N{=}3$)",
+                    mark=False, vmin=vmin, vmax=vmax)
+        im = _log_heatmap(axes[1], over_dir, extent,
+                          r"EKR ($N{=}2$)",
+                          mark=False, vmin=vmin, vmax=vmax)
+        fig.tight_layout()
+
+        cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                          label=r"$\log_{10}\,|\gamma_{\rm eff}/\gamma_{\rm kin} - 1|$")
+        cb.set_ticks([-4, -3, -2, -1])
+        cb.set_ticklabels([r"$\leq 10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                           r"$10^{-1}$"])
+
+        out = FIG_DIR / "fig_hp_beta_sweep.png"
+        fig.savefig(out, dpi=400, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
 
 
 def fig_hp_beta_sweep_abs(path: Path = RUN_DIR / "sweep_hp_beta.npz") -> None:
@@ -1444,18 +1508,24 @@ def fig_hp_beta_sweep_abs(path: Path = RUN_DIR / "sweep_hp_beta.npz") -> None:
     abs_dir = np.abs(d["gamma_direct"] - d["gamma_kin"])
     extent = [eps[0], eps[-1], u_b[0], u_b[-1]]
 
+    # Truncated scale: data spans log10 in [-7.6, -1.8], well inside the
+    # shared [-4, 1] convention used elsewhere -- narrow to [-4, -1] so the
+    # actual spread (mostly HP's -3.3..-1.8) uses the full color range
+    # instead of being squeezed into a sliver of five unused decades.
+    vmin, vmax = -4.0, -1.0
+
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
     _log_heatmap(axes[0], abs_hp,  extent, r"HP Padé $N=3$  (Hammett-Perkins)",
-                mark=False)
+                mark=False, vmin=vmin, vmax=vmax)
     im = _log_heatmap(axes[1], abs_dir, extent, r"Direct $\beta$ closure  ($N=2$)",
-                      mark=False)
+                      mark=False, vmin=vmin, vmax=vmax)
     fig.tight_layout()
 
     cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
                       label=r"$\log_{10}\,|\gamma_{\rm eff} - \gamma_{\rm kin}|$")
-    cb.set_ticks([-4, -3, -2, -1, 0, 1])
-    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
-                       r"$10^{-1}$", r"$10^{0}$", r"$10^{1}$"])
+    cb.set_ticks([-4, -3, -2, -1])
+    cb.set_ticklabels([r"$\leq 10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$"])
 
     out = FIG_DIR / "fig_hp_beta_sweep_abs.png"
     fig.savefig(out, dpi=120, bbox_inches="tight")

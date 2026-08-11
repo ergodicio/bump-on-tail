@@ -75,6 +75,8 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import root
 from scipy.special import wofz
 
+from bot.closures.pade import maxwellian_moment
+
 SQRT_PI = float(np.sqrt(np.pi))
 CHI1_HP = 2.0 / SQRT_PI
 
@@ -107,14 +109,11 @@ def alpha_closure(z):
 # The manifold moment ratios therefore depend on (zeta_*, eta) — the drive
 # lives inside the closure, unlike the gradient-free beta/alpha.
 
-_MAXW_M = (1.0, 0.0, 0.5, 0.0, 0.75, 0.0, 1.875, 0.0)   # M_0..M_7
-
-
 def manifold_Un_over_phi(z, zeta_star: float, eta: float, n_max: int = 3):
     """U_n/phi on the kinetic ITG manifold, n = 0..n_max (needs I_{n_max+2})."""
     I = [Z(z)]
     for n in range(n_max + 2):
-        I.append(z * I[-1] + _MAXW_M[n])
+        I.append(z * I[-1] + maxwellian_moment(n))
     return [zeta_star * (1.0 - 0.5 * eta) * I[n]
             + zeta_star * eta * I[n + 2] - I[n + 1]
             for n in range(n_max + 1)]
@@ -188,6 +187,29 @@ def max_growing_root(D_func, zeta_star: float, eta: float, tau: float = 1.0,
     best = complex(float("nan"), 0.0)
     for re_v in np.linspace(re_lo, re_hi, n_re):
         for im_v in np.geomspace(im_lo, im_hi, n_im):
+            zt = find_mode(D_func, complex(re_v, im_v), zeta_star, eta, tau)
+            if np.isnan(zt.real) or zt.imag <= best.imag:
+                continue
+            if abs(D_func(zt, zeta_star, eta, tau)) < 1e-9:
+                best = zt
+    return best
+
+
+def min_damped_root(D_func, zeta_star: float, eta: float, tau: float = 1.0,
+                    re_lo: float = -3.0, re_hi: float = 3.0,
+                    im_lo: float = -3.0, im_hi: float = -0.001,
+                    n_re: int = 25, n_im: int = 15) -> complex:
+    """Least-damped root of D in the lower half plane (grid + Newton).
+
+    Mirror image of max_growing_root: below threshold, D has no growing
+    root at all, so the physically relevant mode is the slowest-decaying
+    (least negative Im(zeta)) Landau-damped root instead.
+
+    Returns complex(nan, -inf) if no damped root is found.
+    """
+    best = complex(float("nan"), -np.inf)
+    for re_v in np.linspace(re_lo, re_hi, n_re):
+        for im_v in -np.geomspace(-im_hi, -im_lo, n_im):
             zt = find_mode(D_func, complex(re_v, im_v), zeta_star, eta, tau)
             if np.isnan(zt.real) or zt.imag <= best.imag:
                 continue
@@ -353,6 +375,67 @@ def fluid_hp_evolve(zeta_star: float, eta: float, tau: float,
             "phi": Y[0] / tau}
 
 
+# ── fluid: general N-moment linear closure (e.g. AAA-fit, generalizes HP) ───
+# HP's fluid_hp_system is the N=3 special case of this with a hardcoded
+# (Gamma, chi1) closure; here `a` is an arbitrary length-N closure-coefficient
+# array U_N = sum_i a_i U_i (same convention as bot.closures.pade / bot.fluid,
+# and the SAME `a` -- fit purely from the universal Zprime(zeta) -- works for
+# both BoT's fluid_system and this ITG system, since the drive only enters
+# the lower-moment sigma_n source terms, not the closure map itself.
+
+def fluid_pade_system(zeta_star: float, eta: float, tau: float,
+                      a: np.ndarray) -> np.ndarray:
+    """N x N matrix for d/dt (U_0,...,U_{N-1}) with closure U_N = sum a_i U_i.
+
+        dU_n = -i U_{n+1} + i phi sigma_n     n = 0..N-2
+        dU_{N-1} = -i (sum_i a_i U_i) + i phi sigma_{N-1}
+        sigma_n = zeta_* [M_n + eta (M_{n+2} - M_n/2)] - M_{n+1},   phi = U_0/tau
+    """
+    a = np.asarray(a, dtype=complex)
+    N = len(a)
+
+    def sigma(n):
+        M = maxwellian_moment
+        return (zeta_star * (M(n) + eta * (M(n + 2) - 0.5 * M(n)))
+                - M(n + 1))
+
+    A = np.zeros((N, N), dtype=complex)
+    for n in range(N - 1):
+        A[n, n + 1] = -1j
+        A[n, 0] += 1j * sigma(n) / tau
+    n = N - 1
+    A[n, :] += -1j * a
+    A[n, 0] += 1j * sigma(n) / tau
+    return A
+
+
+def fluid_pade_evolve(zeta_star: float, eta: float, tau: float,
+                      t_grid: np.ndarray, y0: np.ndarray, a: np.ndarray,
+                      method: str = "rk45",
+                      rtol: float = 1e-9, atol: float = 1e-12) -> dict:
+    """Evolve the general N-moment linear closure system from y0.
+
+    method="eigen": exact via eigendecomposition.  method="rk45": genuinely
+    time-stepped (see fluid_hp_evolve).
+    """
+    A = fluid_pade_system(zeta_star, eta, tau, a)
+    N = len(a)
+    if method == "eigen":
+        lam, V = np.linalg.eig(A)
+        c = np.linalg.solve(V, y0)
+        Y = np.empty((N, len(t_grid)), dtype=complex)
+        for i, t in enumerate(t_grid):
+            Y[:, i] = V @ (c * np.exp(lam * t))
+    elif method == "rk45":
+        Y = linear_evolve_rk45(A, t_grid, y0, rtol=rtol, atol=atol)
+    else:
+        raise ValueError(f"unknown method {method!r}")
+    out = {"t": t_grid, "phi": Y[0] / tau}
+    for n in range(N):
+        out[f"U{n}"] = Y[n]
+    return out
+
+
 # ── fluid: direct beta (N=2) and direct alpha (N=3) closures ────────────────
 # Same safeguard rationale as bot/closed_loop.py: off-manifold U_0 nodes send
 # U_1/U_0 to large |Im| where Z' overflows; clip the ratio magnitude.
@@ -474,12 +557,13 @@ def density_ic_kinetic(amp: float = 1e-3, N_w: int = 600,
 
 
 def density_ic_fluid(amp: float = 1e-3, N: int = 3) -> np.ndarray:
-    """Matching fluid IC: U_0 = amp, higher moments 0 (up to F0's own M_2)."""
-    y0 = np.zeros(N, dtype=complex)
-    y0[0] = amp
-    if N >= 3:
-        y0[2] = amp * 0.5   # int w^2 (amp F0) dw = amp M_2
-    return y0
+    """Matching fluid IC: U_n = amp * M_n for n = 0..N-1 (moments of amp*F0(w)).
+
+    Exact for any N (was previously hardcoded/incomplete for N > 3, silently
+    zeroing M_4, M_6, ... instead of their true nonzero Maxwellian values).
+    """
+    return np.array([amp * maxwellian_moment(n) for n in range(N)],
+                    dtype=complex)
 
 
 def eigenmode_ic_kinetic(zeta_star: float, eta: float, tau: float = 1.0,
