@@ -31,10 +31,12 @@ ZETA_STAR, TAU = 1.0, 1.0
 RC = {"font.family": "serif", "mathtext.fontset": "cm",
       "font.size": 7, "axes.titlesize": 7}
 
-STYLES = [("kin", dict(color="k", ls="-", lw=1.2), "Kinetic"),
-          ("hp", dict(color="C1", ls="--", lw=1.0),
+STYLES = [("kin", dict(color="k", ls="none", marker="o", ms=1.3,
+                       markevery=20, zorder=10), "Kinetic"),
+          ("hp", dict(color="C1", ls="--", lw=1.0, zorder=5),
            r"HP ($N{=}3$)"),
-          ("beta", dict(color="C0", ls="-.", lw=1.0), r"EKR ($N{=}2$)")]
+          ("beta", dict(color="C0", ls="-", lw=1.0, zorder=4),
+           r"EKR ($N{=}2$)")]
 
 
 def main() -> None:
@@ -74,14 +76,14 @@ def main() -> None:
 
         ax.axhline(0, color="k", lw=0.5)
         ax.axvline(eta_th, color="gray", lw=0.8, ls="--")
-        ax.plot(eta_c, gr(s["z_kin"]), "k-", lw=1.2,
+        ax.plot(eta_c, gr(s["z_kin"]), "k-", lw=1.2, zorder=4,
                 label="Kinetic")
-        ax.plot(eta_c, gr(s["z_hp"]), "C1-", lw=1.0,
+        ax.plot(eta_c, gr(s["z_hp"]), "C1--", lw=1.0, zorder=3,
                 label=r"HP ($N{=}3$)")
         ax.plot(eta_f, np.maximum(s["fit_hp"].imag, 0), "C1s", ms=3.2, mew=0.8,
-                mfc="none", label=r"HP, fit")
+                mfc="none", zorder=5, label=r"HP, fit")
         ax.plot(eta_f, np.maximum(s["fit_beta"].imag, 0), "C0^", ms=4,
-                label=r"EKR, fit")
+                zorder=5, label=r"EKR, fit")
         ax.set_title(rf"(b) $\zeta_* = {ZETA_STAR:g}$, $\tau = {TAU:g}$")
         ax.set_xlabel(r"$\eta = L_n/L_T$")
         ax.set_ylabel(r"$\gamma / (|k_\parallel| v_{ti})$")

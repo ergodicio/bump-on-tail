@@ -1258,9 +1258,10 @@ def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
           f"omega1={omega1:.3f} (xi_b1={xi_b1:.3f}), "
           f"omega2={omega2:.3f} (xi_b2={xi_b2:.3f})")
 
-    ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=8,
+    ax.semilogy(t_grid, np.abs(E_ref), "ko", ms=3.0,
+                markevery=20, zorder=8,
                 label="Kinetic ground truth")
-    ax.semilogy(t_grid, np.abs(E_pade), color="C0", lw=1.2, ls=":", zorder=2,
+    ax.semilogy(t_grid, np.abs(E_pade), color="C1", lw=1.2, ls="--", zorder=4.5,
                 alpha=0.9, label=r"Hammett-Perkins ($N=3$)")
     ax.semilogy(t_grid, np.abs(E_hun4), color="C4", lw=1.2, ls=":", zorder=3,
                 alpha=0.9, label=r"Hunana ($N=4$)")
@@ -1268,7 +1269,7 @@ def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
                 alpha=0.9, label=r"Padé opt ($N=3$)")
     ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=1.2, ls="-.", zorder=3,
                 alpha=0.9, label=r"Padé opt ($N=4$)")
-    ax.semilogy(t_grid, np.abs(E_dir2), color="C1", lw=1.5, ls="--", zorder=4,
+    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=1.5, ls="-", zorder=4,
                 label=r"EKR ($N=2$)")
     ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=1.2, ls="-", zorder=4,
                 alpha=0.9, label=r"NN ($N=3$)")
@@ -1383,11 +1384,11 @@ def _plot_landau_singlemode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
 
     ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=6,
                 label="Kinetic ground truth")
-    ax.semilogy(t_grid, np.abs(E_dir2), color="C1", lw=1.5, ls="--", zorder=4,
+    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=1.5, ls="-", zorder=4,
                 label=r"EKR ($N=2$)")
     ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=2.0, ls="-", zorder=5,
                 label=r"NN ($N=4$)")
-    ax.semilogy(t_grid, np.abs(E_pade), color="C0", lw=1.0, ls=":", zorder=2,
+    ax.semilogy(t_grid, np.abs(E_pade), color="C1", lw=1.0, ls="--", zorder=4.5,
                 alpha=0.8, label=r"Hammett-Perkins ($N=3$)")
 
     finite_traces = [np.abs(E_ref), np.abs(E_dir2), np.abs(E_nn4s), np.abs(E_pade)]

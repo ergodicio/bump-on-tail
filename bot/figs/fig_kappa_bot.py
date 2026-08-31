@@ -81,11 +81,12 @@ def main() -> None:
         y0_ekr = np.array([0.0, AMP, 0.0, 0.0], dtype=complex)
         E_ekr2 = ekr_evolve_kappa(K, U_B, EPS, KAPPA_TRACE, t, y0_ekr)
 
-        ax.semilogy(t, np.abs(E_kin), "k-", lw=1.2,
-                    label="Kinetic")
-        ax.semilogy(t, np.abs(E_hp), "C1--", lw=1.0,
+        ax.semilogy(t, np.abs(E_kin), "ko", ms=1.3, markevery=44,
+                    zorder=10, label="Kinetic")
+        ax.semilogy(t, np.abs(E_hp), "C1--", lw=1.0, zorder=5,
                     label=r"HP ($N{=}3$)")
-        ax.semilogy(t, np.abs(E_ekr2), "C0-.", lw=1.0, label=r"EKR ($N{=}2$)")
+        ax.semilogy(t, np.abs(E_ekr2), "C0-", lw=1.0, zorder=4,
+                    label=r"EKR ($N{=}2$)")
         ax.set_title(rf"(a) $\kappa = {KAPPA_TRACE}$")
         ax.set_xlabel(r"$t\,\omega_{pe}$")
         ax.set_ylabel(r"$|E|$")
