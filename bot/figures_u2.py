@@ -54,15 +54,17 @@ def _fit_gamma(t, E, t_fit_min=25.0):
     return float(slope)
 
 
-def _log_heatmap(ax, over_frac, extent, title):
+def _log_heatmap(ax, over_frac, extent, title, mark=True,
+                  vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX):
     z = np.log10(np.maximum(np.abs(over_frac), 1e-6))
     im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
-                   cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX)
+                   cmap=LOG_OVER_CMAP, vmin=vmin, vmax=vmax)
     ax.set_title(title)
     ax.set_xlabel(r"$\varepsilon = n_b/n_0$")
-    ax.set_ylabel(r"$u_b/v_b$")
-    ax.scatter([0.05], [5.0], c="white", s=60, marker="x", linewidths=2)
-    ax.scatter([0.05], [5.0], c="black", s=20, marker="x", linewidths=1.5)
+    ax.set_ylabel(r"$u_b/v_{tb}$")
+    if mark:
+        ax.scatter([0.05], [5.0], c="white", s=60, marker="x", linewidths=2)
+        ax.scatter([0.05], [5.0], c="black", s=20, marker="x", linewidths=1.5)
     return im
 
 
@@ -390,7 +392,7 @@ def fig_u2_landau_timedomain(nn_path: Path = RUN_DIR / "nn_u2_r1.eqx") -> None:
                  r"(generic $\delta E$ IC)", fontsize=12)
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_timedomain.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -520,7 +522,7 @@ def fig_u2_landau_dispref(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_dispref.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -658,7 +660,7 @@ def fig_u2_landau_damping(nn_path: Path = RUN_DIR / "nn_u2_r1.eqx") -> None:
     fig.suptitle("N=2 closure: Landau-damped minority species", fontsize=12)
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_damping.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -815,7 +817,7 @@ def fig_u2_landau_eigenmode(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_eigenmode.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -995,7 +997,7 @@ def fig_u2_landau_strong(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_strong.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -1004,10 +1006,44 @@ def fig_u2_landau_strong(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
 # Figure 9: Two-mode superposition — off-eigenmode Jensen test
 # ---------------------------------------------------------------------------
 
-def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
-                           nn_u3_path:       Path = RUN_DIR / "naive_mlp.eqx",
-                           nn_n4_path:       Path = RUN_DIR / "n4_nn.eqx",
-                           nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") -> None:
+def _find_landau_twomode_modes(k, u_b, eps):
+    """Return all distinct Landau-damped roots within the training rectangle.
+
+    Training-rectangle constraints (empirical from NN training range):
+      xi_b.imag ∈ (-1.0, 0)    — damped but not extreme
+      xi_b.real ∈ (0, 3.5)     — positive thermal speed
+      omega.imag < -0.03       — clearly damped, not noise
+    """
+    def res(x):
+        D = kinetic_dispersion(x[0] + 1j*x[1], k, u_b, eps)
+        return [D.real, D.imag]
+
+    found = []
+    for seed_re in np.linspace(0.3, 2.5, 15):
+        for seed_im in np.linspace(-0.05, -0.80, 15):
+            try:
+                sol = _scipy_root(res, [seed_re, seed_im], method='hybr')
+                if not sol.success:
+                    continue
+                w = sol.x[0] + 1j*sol.x[1]
+                if abs(kinetic_dispersion(w, k, u_b, eps)) > 1e-6:
+                    continue
+                if w.imag > -0.03:
+                    continue
+                xi_b = (w - k*u_b)/k
+                if xi_b.imag < -1.0 or xi_b.imag >= 0:
+                    continue
+                if xi_b.real < 0 or xi_b.real > 3.5:
+                    continue
+                # Deduplicate: keep if not already in list (|Δω| > 0.01)
+                if all(abs(w - wf) > 0.01 for wf in found):
+                    found.append(w)
+            except Exception:
+                pass
+    return sorted(found, key=lambda w: w.imag)  # most-damped first
+
+
+def fig_u2_landau_twomode(nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") -> None:
     """Two-mode superposition test: off-eigenmode IC with exact analytic reference.
 
     For each (u_b, k, eps), there exist TWO Landau-damped modes (ω₁, ω₂) at
@@ -1028,54 +1064,14 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
     single-eigenmode manifold.
 
     Layout: 2×3 grid; 4 panels (one case each) + 1 legend panel.
-    Closures: Direct-β N=2, NN(r₁) N=2, Direct-α N=3, NN naive N=3, Padé N=2.
+    Closures: Direct-β N=2, NN^super N=4, HP N=3.
     """
-    from bot.closed_loop import (nn_u2_evolve, direct_alpha_evolve, naive_evolve,
-                                  nn_n4_evolve, fluid_eigenmode_ic_n4)
-    from bot.closures.naive_nn import load as load_naive
-    from bot.closures.n4_nn import load as load_n4, load_super as load_n4_super
+    from bot.closed_loop import (nn_n4_evolve, fluid_eigenmode_ic_n4,
+                                  pade_evolve)
+    from bot.closures.n4_nn import load_super as load_n4_super
 
-    model_u2       = MLP_u2(hidden=(32, 32, 32), key=jax.random.PRNGKey(42))
-    model_u2       = eqx.tree_deserialise_leaves(str(nn_u2_path), model_u2)
-    model_u3n      = load_naive()
-    model_n4       = load_n4()
     model_n4_super = load_n4_super()
-
-    def _find_all_modes(k, u_b, eps):
-        """Return all distinct Landau-damped roots within the training rectangle.
-
-        Training-rectangle constraints (empirical from NN training range):
-          xi_b.imag ∈ (-1.0, 0)    — damped but not extreme
-          xi_b.real ∈ (0, 3.5)     — positive thermal speed
-          omega.imag < -0.03       — clearly damped, not noise
-        """
-        def res(x):
-            D = kinetic_dispersion(x[0] + 1j*x[1], k, u_b, eps)
-            return [D.real, D.imag]
-
-        found = []
-        for seed_re in np.linspace(0.3, 2.5, 15):
-            for seed_im in np.linspace(-0.05, -0.80, 15):
-                try:
-                    sol = _scipy_root(res, [seed_re, seed_im], method='hybr')
-                    if not sol.success:
-                        continue
-                    w = sol.x[0] + 1j*sol.x[1]
-                    if abs(kinetic_dispersion(w, k, u_b, eps)) > 1e-6:
-                        continue
-                    if w.imag > -0.03:
-                        continue
-                    xi_b = (w - k*u_b)/k
-                    if xi_b.imag < -1.0 or xi_b.imag >= 0:
-                        continue
-                    if xi_b.real < 0 or xi_b.real > 3.5:
-                        continue
-                    # Deduplicate: keep if not already in list (|Δω| > 0.01)
-                    if all(abs(w - wf) > 0.01 for wf in found):
-                        found.append(w)
-                except Exception:
-                    pass
-        return sorted(found, key=lambda w: w.imag)  # most-damped first
+    _find_all_modes = _find_landau_twomode_modes
 
     # Four two-mode cases (pre-verified to have ≥2 damped modes in training rect)
     cases = [
@@ -1101,7 +1097,8 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
     fig, axes = plt.subplots(2, 3, figsize=(15, 9.0))
     ax_flat = axes.flatten()
 
-    h_ref = h_m1 = h_m2 = h_dir2 = h_nn2 = h_dir3 = h_nn3n = h_nn4 = h_nn4s = h_pade = None
+    h_ref = h_m1 = h_m2 = h_dir2 = h_nn4s = h_pade = None
+    a_hp = pade_coefficients(3)
 
     for idx, (u_b, k, eps, title) in enumerate(cases):
         ax = ax_flat[idx]
@@ -1136,12 +1133,8 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
 
         # ---- Integrate fluid closures (pad with NaN if solver stops early) ----
         E_dir2 = _pad(direct_u2_evolve(k, u_b, eps, t_grid, y0_u2))
-        E_nn2  = _pad(nn_u2_evolve(k, u_b, eps, model_u2, t_grid, y0_u2))
-        E_dir3 = _pad(direct_alpha_evolve(k, u_b, eps, t_grid, y0_u3))
-        E_nn3n = _pad(naive_evolve(k, u_b, eps, model_u3n, t_grid, y0_u3))
-        E_nn4   = _pad(nn_n4_evolve(k, u_b, eps, model_n4,       t_grid, y0_n4))
         E_nn4s  = _pad(nn_n4_evolve(k, u_b, eps, model_n4_super, t_grid, y0_n4))
-        E_pade  = _pad(pade_u2_evolve(k, u_b, eps, t_grid, y0_u2))
+        E_pade  = _pad(pade_evolve(k, u_b, eps, a_hp, t_grid, y0_u3, method="rk45"))
 
         # ---- Plot ----
         h_m1,  = ax.semilogy(t_grid, E_m1, color="0.70", lw=1.0, ls="--",  zorder=1,
@@ -1152,18 +1145,10 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
                               label=r"$|e^{-i\omega_1 t}+e^{-i\omega_2 t}|$ (analytic)")
         h_dir2, = ax.semilogy(t_grid, np.abs(E_dir2), color="C1", lw=1.5, ls="--",  zorder=4,
                                label=r"Direct $\beta$, N=2")
-        h_nn2,  = ax.semilogy(t_grid, np.abs(E_nn2),  color="C2", lw=1.5, ls="-.", zorder=4,
-                               label=r"NN$(r_1)$, N=2")
-        h_dir3, = ax.semilogy(t_grid, np.abs(E_dir3), color="C3", lw=1.5, ls="--",  zorder=3,
-                               label=r"Direct $\alpha$, N=3")
-        h_nn3n, = ax.semilogy(t_grid, np.abs(E_nn3n), color="C4", lw=1.5, ls="-.", zorder=3,
-                               label=r"NN naive$(r_1,r_2)$, N=3")
-        h_nn4,  = ax.semilogy(t_grid, np.abs(E_nn4),  color="C5", lw=1.5, ls="-.", zorder=5,
-                               label=r"NN$(r_1,r_2,r_3)$, N=4  [1-mode train]")
         h_nn4s, = ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=2.0, ls="-",  zorder=5,
                                label=r"NN$^{\rm super}(r_1,r_2,r_3)$, N=4  [super train]")
         h_pade, = ax.semilogy(t_grid, np.abs(E_pade), color="C0", lw=1.0, ls=":",  zorder=2,
-                               alpha=0.8, label="Padé N=2")
+                               alpha=0.8, label="HP N=3")
 
         ax.set_title(
             title + fr",  $\varepsilon={eps}$" + "\n"
@@ -1179,18 +1164,14 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
     # Legend panel
     ax_leg = ax_flat[4]
     ax_leg.axis("off")
-    handles = [h_ref, h_m1, h_m2, h_dir2, h_nn2, h_dir3, h_nn3n, h_nn4, h_nn4s, h_pade]
+    handles = [h_ref, h_m1, h_m2, h_dir2, h_nn4s, h_pade]
     labels  = [
         r"$|$amp$\,e^{-i\omega_1 t}+$amp$\,e^{-i\omega_2 t}|$ — analytic (kinetic superposition)",
         r"amp$\,e^{\gamma_1 t}$ — mode 1 envelope",
         r"amp$\,e^{\gamma_2 t}$ — mode 2 envelope",
         r"Direct $\beta$, N=2",
-        r"NN$(r_1)$, N=2",
-        r"Direct $\alpha$, N=3",
-        r"NN naive$(r_1,r_2)$, N=3",
-        r"NN$(r_1,r_2,r_3)$, N=4  [1-mode training]",
         r"NN$^{\rm super}(r_1,r_2,r_3)$, N=4  [superposition training]",
-        r"Padé N=2",
+        r"HP N=3 (time-stepped, RK45)",
     ]
     ax_leg.legend(handles, labels, loc="upper center", fontsize=8.5,
                   title="IC = eigenmode$_1$ + eigenmode$_2$  (off single-mode manifold)\n"
@@ -1209,9 +1190,262 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_twomode.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
+
+
+def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
+                               amp=1e-3, t_end=60.0,
+                               legend_loc="lower left") -> None:
+    """Shared single-panel plotting logic for fig_u2_landau_twomode_single.
+
+    y-limits are clipped to the actual finite data range (plus a small
+    margin) rather than a fixed value, since different (u_b, k) cases decay
+    to very different noise floors within the same t_end window.
+    """
+    from bot.closed_loop import (nn_n4_evolve, fluid_eigenmode_ic_n4,
+                                  pade_evolve)
+
+    t_grid = np.linspace(0, t_end, 1201)
+    n_t    = len(t_grid)
+
+    def _pad(E):
+        if len(E) >= n_t:
+            return E[:n_t]
+        out = np.full(n_t, np.nan, dtype=complex)
+        out[:len(E)] = E
+        return out
+
+    modes = _find_landau_twomode_modes(k, u_b, eps)
+    omega1, omega2 = modes[0], modes[1]
+    gamma1, gamma2 = omega1.imag, omega2.imag
+    xi_b1 = (omega1 - k*u_b)/k
+    xi_b2 = (omega2 - k*u_b)/k
+
+    E_ref = amp * np.exp(-1j*omega1*t_grid) + amp * np.exp(-1j*omega2*t_grid)
+    E_m1 = amp * np.exp(gamma1 * t_grid)
+    E_m2 = amp * np.exp(gamma2 * t_grid)
+
+    y0_u2 = (fluid_eigenmode_ic_u2(k, u_b, omega1, amp=amp) +
+             fluid_eigenmode_ic_u2(k, u_b, omega2, amp=amp))
+    y0_u3 = (fluid_eigenmode_ic_u3(k, u_b, omega1, amp=amp) +
+             fluid_eigenmode_ic_u3(k, u_b, omega2, amp=amp))
+    y0_n4 = (fluid_eigenmode_ic_n4(k, u_b, omega1, amp=amp) +
+             fluid_eigenmode_ic_n4(k, u_b, omega2, amp=amp))
+
+    # The same seven closures as fig_opt_hunana_sweep (PANELS there), evolved
+    # from the identical two-mode superposition IC: four linear Hunana-family
+    # closures (HP N=3, opt N=3, two-point N=4, opt N=4) via pade_evolve, plus
+    # the three nonlinear closures (EKR N=2, naive NN N=3, super NN N=4).
+    from bot.closures.opt_hunana import opt_coefficients
+    from bot.closures.pade import two_point_coefficients
+    from bot.closures.naive_nn import load as load_naive
+    from bot.closed_loop import naive_evolve
+
+    E_dir2 = _pad(direct_u2_evolve(k, u_b, eps, t_grid, y0_u2))
+    E_nn4s = _pad(nn_n4_evolve(k, u_b, eps, model_n4_super, t_grid, y0_n4))
+    E_nn3  = _pad(naive_evolve(k, u_b, eps, load_naive(), t_grid, y0_u3))
+    E_pade = _pad(pade_evolve(k, u_b, eps, a_hp, t_grid, y0_u3, method="rk45"))
+    E_opt3 = _pad(pade_evolve(k, u_b, eps, opt_coefficients(3), t_grid, y0_u3,
+                              method="rk45"))
+    E_hun4 = _pad(pade_evolve(k, u_b, eps, two_point_coefficients(4, 2),
+                              t_grid, y0_n4, method="rk45"))
+    E_opt4 = _pad(pade_evolve(k, u_b, eps, opt_coefficients(4), t_grid, y0_n4,
+                              method="rk45"))
+
+    print(f"twomode {title}: u_b={u_b:g}, k={k:g}, eps={eps:g}, "
+          f"omega1={omega1:.3f} (xi_b1={xi_b1:.3f}), "
+          f"omega2={omega2:.3f} (xi_b2={xi_b2:.3f})")
+
+    ax.semilogy(t_grid, np.abs(E_ref), "ko", ms=1.6,
+                markevery=20, zorder=8,
+                label="Kinetic")
+    ax.semilogy(t_grid, np.abs(E_pade), color="C1", lw=0.7, ls="--", zorder=4.5,
+                alpha=0.9, label=r"HP ($N{=}3$)")
+    ax.semilogy(t_grid, np.abs(E_hun4), color="C4", lw=0.7, ls=":", zorder=3,
+                alpha=0.9, label=r"Hunana ($N=4$)")
+    ax.semilogy(t_grid, np.abs(E_opt3), color="C2", lw=0.7, ls="-.", zorder=2,
+                alpha=0.9, label=r"Padé opt ($N=3$)")
+    ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=0.7, ls="-.", zorder=3,
+                alpha=0.9, label=r"Padé opt ($N=4$)")
+    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=0.8, ls="-", zorder=4,
+                label=r"EKR ($N=2$)")
+    ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=0.7, ls="-", zorder=4,
+                alpha=0.9, label=r"NN ($N=3$)")
+    ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=1.0, ls="-", zorder=5,
+                label=r"NN ($N=4$)")
+
+    # Clip y-axis to the actual data range (bottom: finite-value floor of
+    # the reference/closure traces; top: just above the initial amplitude).
+    finite_traces = [np.abs(E_ref), np.abs(E_dir2), np.abs(E_nn4s),
+                     np.abs(E_nn3), np.abs(E_pade), np.abs(E_opt3),
+                     np.abs(E_hun4), np.abs(E_opt4)]
+    all_vals = np.concatenate(finite_traces)
+    all_vals = all_vals[np.isfinite(all_vals) & (all_vals > 0)]
+    ylo = 10 ** (np.floor(np.log10(all_vals.min())) - 0.5)
+    yhi = 10 ** (np.ceil(np.log10(all_vals.max())) + 0.2)
+
+    ax.set_title(title)
+    ax.set_xlim(0, t_end)
+    ax.set_ylim(bottom=ylo, top=yhi)
+    ax.set_xlabel(r"$t\,\omega_{pe}$")
+    ax.set_ylabel(r"$|E|$")
+    if legend_loc:
+        ax.legend(fontsize=10, loc=legend_loc, labelspacing=0.3,
+                  handlelength=1.8, borderpad=0.3)
+
+
+def fig_u2_landau_twomode_single(
+        nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") -> None:
+    """Scaled-down version of fig_u2_landau_twomode: top-middle + top-right cases.
+
+    Same computation/style as fig_u2_landau_twomode, restricted to the
+    u_b=1.0, k=0.50 and u_b=1.5, k=0.40 cases, each with its own inline
+    legend and its y-axis clipped to that case's actual data range (rather
+    than the fixed 1e-10 floor used in the full 2x3 grid, which is far
+    below where the u_b=1.5, k=0.40 traces actually decay to).
+    """
+    from bot.closures.n4_nn import load_super as load_n4_super
+
+    model_n4_super = load_n4_super()
+    a_hp = pade_coefficients(3)
+
+    import matplotlib as mpl
+
+    cases = [
+        (1.5, 0.40, 0.05, ""),
+    ]
+
+    # Computer Modern (LaTeX-style) fonts to match the other paper figures.
+    with mpl.rc_context({"font.family": "serif", "mathtext.fontset": "cm",
+                         "font.size": 7, "axes.titlesize": 7}):
+        fig, ax = plt.subplots(1, 1, figsize=(3.4, 1.92))
+        axes = [ax]
+        for i, (ax, (u_b, k, eps, title)) in enumerate(zip(axes, cases)):
+            _plot_landau_twomode_case(ax, u_b, k, eps, title,
+                                      model_n4_super, a_hp,
+                                      legend_loc=None)
+
+        fig.tight_layout(rect=[0, 0.17, 1, 1])
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="lower center", ncol=3,
+                   fontsize=4.8, labelspacing=0.25, handlelength=1.3,
+                   handletextpad=0.4, columnspacing=1.0, frameon=False,
+                   bbox_to_anchor=(0.5, 0.01))
+        out = FIG_DIR / "fig_u2_landau_twomode_single.png"
+        fig.savefig(out, dpi=400, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
+
+
+def _plot_landau_singlemode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
+                                  amp=1e-3, t_end=60.0,
+                                  legend_loc="lower left") -> None:
+    """Single-eigenmode counterpart of _plot_landau_twomode_case.
+
+    IC = a single kinetic eigenmode (the most-damped Landau root at this
+    (u_b, k, eps), i.e. the same omega1 used as "mode 1" in the two-mode
+    test).  On this IC, Direct-beta/HP/NN^super are all exact-by-
+    construction for the *fluid* moments they're built from -- but only
+    Direct-beta's fixed point is an eigenmode of its own closed dynamical
+    system.  HP N=3's closure relation differs from the exact beta(xi_b)
+    used to build the IC, so the IC is off HP's own eigenmode manifold and
+    it leaks into its own (generally different) eigenmodes -- same
+    mechanism as the two-mode test, but here isolated with no admixture
+    from a second mode.
+    """
+    from bot.closed_loop import (nn_n4_evolve, fluid_eigenmode_ic_n4,
+                                  pade_evolve)
+
+    t_grid = np.linspace(0, t_end, 1201)
+    n_t    = len(t_grid)
+
+    def _pad(E):
+        if len(E) >= n_t:
+            return E[:n_t]
+        out = np.full(n_t, np.nan, dtype=complex)
+        out[:len(E)] = E
+        return out
+
+    modes = _find_landau_twomode_modes(k, u_b, eps)
+    omega1 = modes[0]      # most-damped Landau root
+    gamma1 = omega1.imag
+    xi_b1 = (omega1 - k*u_b) / k
+
+    E_ref = amp * np.exp(-1j*omega1*t_grid)
+
+    y0_u2 = fluid_eigenmode_ic_u2(k, u_b, omega1, amp=amp)
+    y0_u3 = fluid_eigenmode_ic_u3(k, u_b, omega1, amp=amp)
+    y0_n4 = fluid_eigenmode_ic_n4(k, u_b, omega1, amp=amp)
+
+    E_dir2 = _pad(direct_u2_evolve(k, u_b, eps, t_grid, y0_u2))
+    E_nn4s = _pad(nn_n4_evolve(k, u_b, eps, model_n4_super, t_grid, y0_n4))
+    E_pade = _pad(pade_evolve(k, u_b, eps, a_hp, t_grid, y0_u3, method="rk45"))
+
+    print(f"singlemode {title}: u_b={u_b:g}, k={k:g}, eps={eps:g}, "
+          f"omega1={omega1:.3f} (xi_b1={xi_b1:.3f}, gamma1={gamma1:.4f})")
+
+    ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=6,
+                label="Kinetic ground truth")
+    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=1.5, ls="-", zorder=4,
+                label=r"EKR ($N=2$)")
+    ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=2.0, ls="-", zorder=5,
+                label=r"NN ($N=4$)")
+    ax.semilogy(t_grid, np.abs(E_pade), color="C1", lw=1.0, ls="--", zorder=4.5,
+                alpha=0.8, label=r"Hammett-Perkins ($N=3$)")
+
+    finite_traces = [np.abs(E_ref), np.abs(E_dir2), np.abs(E_nn4s), np.abs(E_pade)]
+    all_vals = np.concatenate(finite_traces)
+    all_vals = all_vals[np.isfinite(all_vals) & (all_vals > 0)]
+    ylo = 10 ** (np.floor(np.log10(all_vals.min())) - 0.5)
+    yhi = 10 ** (np.ceil(np.log10(all_vals.max())) + 0.2)
+
+    ax.set_title(title)
+    ax.set_xlim(0, t_end)
+    ax.set_ylim(bottom=ylo, top=yhi)
+    ax.set_xlabel(r"$t\,\omega_{pe}$")
+    ax.set_ylabel(r"$|E|$")
+    if legend_loc:
+        ax.legend(fontsize=10, loc=legend_loc, labelspacing=0.3,
+                  handlelength=1.8, borderpad=0.3)
+
+
+def fig_u2_landau_singlemode(
+        nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") -> None:
+    """Single-eigenmode counterpart of fig_u2_landau_twomode_single.
+
+    Same two cases (u_b=1.0, k=0.50 and u_b=1.5, k=0.40), same closures and
+    styling, but IC = a single kinetic eigenmode rather than a two-mode
+    superposition -- isolates each closure's behavior with no Jensen-error
+    admixture from a second mode.
+    """
+    from bot.closures.n4_nn import load_super as load_n4_super
+
+    model_n4_super = load_n4_super()
+    a_hp = pade_coefficients(3)
+
+    import matplotlib as mpl
+
+    cases = [
+        (1.5, 0.40, 0.05, ""),
+    ]
+
+    # Computer Modern (LaTeX-style) fonts to match the other paper figures.
+    with mpl.rc_context({"font.family": "serif", "mathtext.fontset": "cm",
+                         "font.size": 16, "axes.titlesize": 16}):
+        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
+        for i, (ax, (u_b, k, eps, title)) in enumerate(zip(axes, cases)):
+            _plot_landau_singlemode_case(ax, u_b, k, eps, title,
+                                         model_n4_super, a_hp,
+                                         legend_loc="lower left" if i == 0
+                                         else None)
+
+        fig.tight_layout()
+        out = FIG_DIR / "fig_u2_landau_singlemode.png"
+        fig.savefig(out, dpi=400, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -1219,23 +1453,85 @@ def fig_u2_landau_twomode(nn_u2_path:       Path = RUN_DIR / "nn_u2_r1.eqx",
 # ---------------------------------------------------------------------------
 
 def fig_hp_beta_sweep(path: Path = RUN_DIR / "sweep_hp_beta.npz") -> None:
-    """Log10|γ_eff/γ_kin − 1| heatmaps: HP Padé N=3 vs Direct β (N=2)."""
+    """Log10|γ_eff/γ_kin − 1| heatmaps: HP Padé N=3 vs EKR (N=2)."""
+    import matplotlib as mpl
+
     d = np.load(path)
     u_b = d["u_b_vals"]; eps = d["eps_vals"]
     over_hp  = d["overshoot_hp"]
     over_dir = d["overshoot_direct"]
     extent = [eps[0], eps[-1], u_b[0], u_b[-1]]
 
+    # Truncated scale: data spans log10 in [-7.0, -1.1], well inside the
+    # shared [-4, 1] convention used elsewhere -- narrow to [-4, -1] so the
+    # actual spread uses the full color range (see fig_hp_beta_sweep_abs,
+    # same rationale).
+    vmin, vmax = -4.0, -1.0
+
+    # Computer Modern (LaTeX-style) fonts to match the paper's other figures;
+    # mathtext 'cm' rather than usetex so no external latex install is needed.
+    with mpl.rc_context({"font.family": "serif",
+                         "mathtext.fontset": "cm",
+                         "font.size": 7,
+                         "axes.titlesize": 7}):
+        fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9))
+        _log_heatmap(axes[0], over_hp,  extent, r"HP ($N{=}3$)",
+                    mark=False, vmin=vmin, vmax=vmax)
+        im = _log_heatmap(axes[1], over_dir, extent,
+                          r"EKR ($N{=}2$)",
+                          mark=False, vmin=vmin, vmax=vmax)
+        fig.tight_layout()
+
+        cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                          label=r"$\log_{10}\,|\gamma_{\rm eff}/\gamma_{\rm kin} - 1|$")
+        cb.set_ticks([-4, -3, -2, -1])
+        cb.set_ticklabels([r"$\leq 10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                           r"$10^{-1}$"])
+
+        out = FIG_DIR / "fig_hp_beta_sweep.png"
+        fig.savefig(out, dpi=400, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
+
+
+def fig_hp_beta_sweep_abs(path: Path = RUN_DIR / "sweep_hp_beta.npz") -> None:
+    """Log10(ABSOLUTE growth-rate error) heatmaps: HP Padé N=3 vs Direct β.
+
+    Same data as fig_hp_beta_sweep, but plots the raw |gamma_eff - gamma_kin|
+    instead of normalizing by |gamma_kin|.  gamma_kin varies ~9x across this
+    grid (0.035 at u_b=3,eps=0.01 up to 0.32 at u_b=10,eps=0.20), so the
+    relative metric can make small-gamma_kin cells look disproportionately
+    bad even when the absolute rate error is tiny -- this view isolates the
+    raw rate error itself.
+    """
+    d = np.load(path)
+    if "gamma_kin" not in d:
+        raise KeyError("No gamma_kin key found. Re-run bot.sweeps.sweep_hp_beta.")
+    u_b = d["u_b_vals"]; eps = d["eps_vals"]
+    abs_hp  = np.abs(d["gamma_hp"]     - d["gamma_kin"])
+    abs_dir = np.abs(d["gamma_direct"] - d["gamma_kin"])
+    extent = [eps[0], eps[-1], u_b[0], u_b[-1]]
+
+    # Truncated scale: data spans log10 in [-7.6, -1.8], well inside the
+    # shared [-4, 1] convention used elsewhere -- narrow to [-4, -1] so the
+    # actual spread (mostly HP's -3.3..-1.8) uses the full color range
+    # instead of being squeezed into a sliver of five unused decades.
+    vmin, vmax = -4.0, -1.0
+
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
-    _log_heatmap(axes[0], over_hp,  extent, r"HP Padé $N=3$  (Hammett-Perkins)")
-    im = _log_heatmap(axes[1], over_dir, extent, r"Direct $\beta$ closure  ($N=2$)")
-    fig.suptitle(
-        r"$\gamma_{\rm eff}$ relative error vs kinetic  (generic $\delta E$ IC)",
-        fontsize=13, y=1.02,
-    )
+    _log_heatmap(axes[0], abs_hp,  extent, r"HP Padé $N=3$  (Hammett-Perkins)",
+                mark=False, vmin=vmin, vmax=vmax)
+    im = _log_heatmap(axes[1], abs_dir, extent, r"Direct $\beta$ closure  ($N=2$)",
+                      mark=False, vmin=vmin, vmax=vmax)
     fig.tight_layout()
-    _add_colorbar(fig, im)
-    out = FIG_DIR / "fig_hp_beta_sweep.png"
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,|\gamma_{\rm eff} - \gamma_{\rm kin}|$")
+    cb.set_ticks([-4, -3, -2, -1])
+    cb.set_ticklabels([r"$\leq 10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$"])
+
+    out = FIG_DIR / "fig_hp_beta_sweep_abs.png"
     fig.savefig(out, dpi=120, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
@@ -1294,6 +1590,62 @@ def fig_twomode_sweep(path: Path = RUN_DIR / "sweep_twomode.npz") -> None:
     plt.close(fig)
 
 
+def fig_twomode_sweep_gamma(path: Path = RUN_DIR / "sweep_twomode.npz") -> None:
+    """Log10(rel damping-rate error) heatmaps for the Landau two-mode sweep.
+
+    Uses the late-time log|E| slope as the effective damping rate, ignoring
+    phase entirely. For the Landau case (u_b=1, k=0.5, both modes damped),
+    the late-time rate equals the least-damped eigenvalue's Im(ω) for w<1.
+    """
+    d = np.load(path)
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+
+    if "err_dir_gamma" not in d:
+        raise KeyError("No gamma-only keys found. Re-run bot.sweeps.sweep_twomode.")
+
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+
+    _panel(axes[0], d["err_dir_gamma"], r"Direct $\beta$  ($N=2$)")
+    _panel(axes[1], d["err_nn_gamma"],  r"N=4 NN$^{\rm super}$  ($r_1,r_2,r_3$)")
+    im = _panel(axes[2], d["err_hp_gamma"],  r"HP Padé $N=3$")
+
+    axes[0].text(0.02, 0.97, "mode 1", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+    axes[0].text(0.78, 0.97, "mode 2", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+
+    fig.suptitle(
+        r"Two-mode IC (Landau regime): $|\gamma_{\rm fluid} - \gamma_{\rm ref}|/|\gamma_{\rm ref}|$  "
+        r"($u_b=1.0,\;k=0.5$;  both modes damped)",
+        fontsize=10, y=1.02,
+    )
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,|\gamma_{\rm fluid} - \gamma_{\rm ref}|/|\gamma_{\rm ref}|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep_gamma.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
 # ---------------------------------------------------------------------------
 # Figure: Two-mode mixing sweep — GROWING regime
 # ---------------------------------------------------------------------------
@@ -1345,6 +1697,126 @@ def fig_twomode_sweep_growing(path: Path = RUN_DIR / "sweep_twomode_growing.npz"
                        r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
 
     out = FIG_DIR / "fig_twomode_sweep_growing.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+def fig_twomode_sweep_growing_gamma(path: Path = RUN_DIR / "sweep_twomode_growing.npz") -> None:
+    """Log10(rel growth-rate error) heatmaps for the growing-regime two-mode sweep.
+
+    Unlike fig_twomode_sweep_growing (full complex-waveform RMSE, which mixes
+    growth-rate and real-frequency/phase error), this isolates growth-rate
+    accuracy only: |gamma_fluid - gamma_ref| / |gamma_ref|, fit from the
+    late-time log-amplitude slope of each signal. A closure can have a large
+    RMSE here purely from phase drift while still tracking the correct
+    instability rate -- this figure shows whether that is in fact the case.
+    """
+    d = np.load(path)
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+
+    _panel(axes[0], d["err_dir_gamma"], r"Direct $\beta$  ($N=2$)")
+    _panel(axes[1], d["err_nn_gamma"],  r"N=4 NN$^{\rm super}$  ($r_1,r_2,r_3$)")
+    im = _panel(axes[2], d["err_hp_gamma"],  r"HP Padé $N=3$")
+
+    axes[0].text(0.02, 0.97, "growing", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+    axes[0].text(0.78, 0.97, "damped", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+
+    fig.suptitle(
+        r"Two-mode IC (growing regime): $|\gamma_{\rm fluid} - \gamma_{\rm ref}|/|\gamma_{\rm ref}|$  "
+        r"($u_b=5.0,\;k=0.3$;  $w{=}0$: growing beam,  $w{=}1$: damped upper branch)",
+        fontsize=10, y=1.02,
+    )
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,|\gamma_{\rm fluid} - \gamma_{\rm ref}|/|\gamma_{\rm ref}|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep_growing_gamma.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+def fig_twomode_sweep_growing_gamma_abs(
+        path: Path = RUN_DIR / "sweep_twomode_growing.npz") -> None:
+    """Log10(ABSOLUTE growth-rate error) heatmaps for the growing-regime sweep.
+
+    Same data as fig_twomode_sweep_growing_gamma, but plots the raw
+    |gamma_fluid - gamma_ref| instead of normalizing by |gamma_ref|.  Near
+    the w->1 edge (pure damped upper-branch mode), gamma_ref itself shrinks
+    toward zero as epsilon increases (e.g. -0.039 at eps=0.2), so the
+    relative metric blows up there even when the absolute rate error is
+    modest -- this view separates "the true rate is hard to resolve
+    because it's tiny" from "the closure's predicted rate is actually far
+    off in absolute terms."
+    """
+    d = np.load(path)
+    if "err_dir_gamma_abs" not in d:
+        raise KeyError(
+            "No *_gamma_abs keys found. Re-run bot.sweeps.sweep_twomode_growing."
+        )
+    w_vals   = d["w_vals"]
+    eps_vals = d["eps_vals"]
+
+    extent = [w_vals[0], w_vals[-1], eps_vals[0], eps_vals[-1]]
+
+    def _panel(ax, err, title):
+        z = np.log10(np.maximum(err, 1e-8))
+        im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
+                       cmap=LOG_OVER_CMAP, vmin=LOG_OVER_VMIN, vmax=LOG_OVER_VMAX,
+                       interpolation="nearest")
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel(r"Mixing weight $w$")
+        ax.set_ylabel(r"$\varepsilon = n_b/n_0$")
+        return im
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+
+    _panel(axes[0], d["err_dir_gamma_abs"], r"Direct $\beta$  ($N=2$)")
+    _panel(axes[1], d["err_nn_gamma_abs"],  r"N=4 NN$^{\rm super}$  ($r_1,r_2,r_3$)")
+    im = _panel(axes[2], d["err_hp_gamma_abs"],  r"HP Padé $N=3$")
+
+    axes[0].text(0.02, 0.97, "growing", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+    axes[0].text(0.78, 0.97, "damped", transform=axes[0].transAxes,
+                 fontsize=8, va="top", color="white", alpha=0.8)
+
+    fig.suptitle(
+        r"Two-mode IC (growing regime): $|\gamma_{\rm fluid} - \gamma_{\rm ref}|$  "
+        r"(NOT normalized by $|\gamma_{\rm ref}|$)  "
+        r"($u_b=5.0,\;k=0.3$;  $w{=}0$: growing beam,  $w{=}1$: damped upper branch)",
+        fontsize=10, y=1.02,
+    )
+    fig.tight_layout()
+
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.85,
+                      label=r"$\log_{10}\,|\gamma_{\rm fluid} - \gamma_{\rm ref}|$")
+    cb.set_ticks([-4, -3, -2, -1, 0, 1])
+    cb.set_ticklabels([r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$",
+                       r"$10^{-1}$", r"$10^{0}$", r"$\geq 10^{1}$"])
+
+    out = FIG_DIR / "fig_twomode_sweep_growing_gamma_abs.png"
     fig.savefig(out, dpi=120, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
@@ -1425,6 +1897,127 @@ def fig_twomode_sweep_growing_nn_hp(path: Path = RUN_DIR / "sweep_twomode_growin
 
     out = FIG_DIR / "fig_twomode_sweep_growing_nn_hp.png"
     fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out}")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure: Time-domain traces at w=1 (pure damped upper-branch mode)
+# ---------------------------------------------------------------------------
+
+def fig_twomode_growing_w1_timedomain(
+        nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") -> None:
+    """Time-domain E(t) traces at the w=1 edge of the growing-regime sweep.
+
+    fig_twomode_sweep_growing_gamma.png shows a large growth-rate error for
+    every closure exactly at w=1 (pure "damped upper branch" kinetic mode,
+    no admixture of the growing beam mode).  This figure shows why: it
+    plots |E(t)| for the kinetic reference against Direct-beta, HP N=3
+    (Pade), and the N=4 NN super closure, starting from the exact single-
+    mode eigenmode IC (fluid_eigenmode_ic_u2/u3/n4 at omega2 only).
+
+    Direct-beta is exact-by-construction on this IC and tracks the
+    reference almost perfectly.  HP N=3's fixed linear system has its own
+    eigenmodes, none of which coincides with the true kinetic eigenmode at
+    xi_b2 -- so the IC has a small but nonzero projection onto HP's own
+    spurious fastest-growing eigenvector, which eventually dominates and
+    diverges exponentially away from the (weakly damped) true reference.
+    The N=4 NN, whose static alpha4 prediction at xi_b2 is accurate to
+    ~0.1-0.5%, shows the same mechanism in a far milder, delayed form: the
+    small residual closure bias compounds over the ~40-time-unit window.
+    """
+    from bot.closed_loop import (nn_n4_evolve, fluid_eigenmode_ic_n4,
+                                  pade_evolve, direct_u2_evolve,
+                                  fluid_eigenmode_ic_u2, fluid_eigenmode_ic_u3)
+    from bot.closures.n4_nn import load_super as load_n4_super
+    from bot.sweeps.sweep_twomode_growing import _find_two_modes, K, U_B
+
+    model_n4_super = load_n4_super()
+    a_hp = pade_coefficients(3)
+
+    amp    = 1e-3
+    t_end  = 40.0
+    t_grid = np.linspace(0, t_end, 801)
+    n_t    = len(t_grid)
+
+    def _pad(E):
+        if len(E) >= n_t:
+            return E[:n_t]
+        out = np.full(n_t, np.nan, dtype=complex)
+        out[:len(E)] = E
+        return out
+
+    eps_vals = [0.02, 0.05, 0.10, 0.15, 0.20]
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9.0))
+    ax_flat = axes.flatten()
+
+    h_ref = h_dir = h_hp = h_nn = None
+
+    for idx, eps in enumerate(eps_vals):
+        ax = ax_flat[idx]
+
+        modes = _find_two_modes(K, U_B, eps)
+        if len(modes) < 2:
+            ax.text(0.5, 0.5, f"< 2 modes found", ha="center", va="center",
+                    transform=ax.transAxes)
+            ax.set_title(fr"$\varepsilon={eps}$")
+            continue
+        omega1, omega2 = modes         # growing, damped upper branch
+        gamma2 = omega2.imag
+        xi_b2 = (omega2 - K*U_B) / K
+
+        E_ref = amp * np.exp(-1j * omega2 * t_grid)
+
+        y0_u2 = fluid_eigenmode_ic_u2(K, U_B, omega2, amp=amp)
+        y0_u3 = fluid_eigenmode_ic_u3(K, U_B, omega2, amp=amp)
+        y0_n4 = fluid_eigenmode_ic_n4(K, U_B, omega2, amp=amp)
+
+        E_dir = _pad(direct_u2_evolve(K, U_B, eps, t_grid, y0_u2))
+        E_hp  = _pad(pade_evolve(K, U_B, eps, a_hp, t_grid, y0_u3, method="rk45"))
+        E_nn  = _pad(nn_n4_evolve(K, U_B, eps, model_n4_super, t_grid, y0_n4))
+
+        h_ref, = ax.semilogy(t_grid, np.abs(E_ref), "k-", lw=2.5, zorder=6,
+                              label=r"kinetic ref $|{\rm amp}\,e^{-i\omega_2 t}|$")
+        h_dir, = ax.semilogy(t_grid, np.abs(E_dir), color="C1", lw=1.5, ls="--",
+                              zorder=4, label=r"Direct $\beta$, N=2")
+        h_hp,  = ax.semilogy(t_grid, np.abs(E_hp),  color="C0", lw=1.5, ls=":",
+                              zorder=3, label="HP N=3 (RK45)")
+        h_nn,  = ax.semilogy(t_grid, np.abs(E_nn),  color="C6", lw=2.0, ls="-",
+                              zorder=5, label=r"N=4 NN$^{\rm super}$")
+
+        ax.set_title(
+            fr"$\varepsilon={eps}$" + "\n"
+            + fr"$\omega_2={omega2:.3f}$  ($\xi_{{b2}}={xi_b2:.3f}$),  $\gamma_2={gamma2:.4f}$",
+            fontsize=9,
+        )
+        ax.set_xlim(0, t_end)
+        ax.set_ylim(bottom=1e-6, top=1e2)
+        ax.set_xlabel(r"$t\;[\omega_p^{-1}]$")
+        ax.set_ylabel(r"$|E(t)|$")
+
+    ax_leg = ax_flat[5]
+    ax_leg.axis("off")
+    ax_leg.legend([h_ref, h_dir, h_hp, h_nn],
+                  [r"kinetic ref $|{\rm amp}\,e^{-i\omega_2 t}|$ (pure damped upper-branch mode)",
+                   r"Direct $\beta$, N=2",
+                   r"HP N=3 (Padé, time-stepped RK45)",
+                   r"N=4 NN$^{\rm super}(r_1,r_2,r_3)$ (retrained, wide $w$ coverage)"],
+                  loc="upper center", fontsize=9,
+                  title="IC = single kinetic eigenmode at $\\omega_2$ (w=1 edge of\n"
+                        "fig_twomode_sweep_growing_gamma.png) — no growing-mode admixture",
+                  title_fontsize=8.5, frameon=True)
+
+    fig.suptitle(
+        r"Growing regime, $w=1$ edge: pure damped upper-branch mode "
+        r"($u_b=5.0,\;k=0.3$)" + "\n"
+        r"Direct-$\beta$ is exact by construction; HP/NN blow up once a tiny "
+        r"projection onto their own fastest-growing mode overtakes the true (weak) decay",
+        fontsize=10.5, y=1.02,
+    )
+    fig.tight_layout()
+    out = FIG_DIR / "fig_twomode_growing_w1_timedomain.png"
+    fig.savefig(out, dpi=130, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -1784,6 +2377,12 @@ if __name__ == "__main__":
     print("=== fig_u2_landau_twomode ===")
     fig_u2_landau_twomode()
 
+    print("=== fig_u2_landau_twomode_single ===")
+    fig_u2_landau_twomode_single()
+
+    print("=== fig_u2_landau_singlemode ===")
+    fig_u2_landau_singlemode()
+
     if all_figs or (RUN_DIR / "sweep_singlemode.npz").exists():
         print("=== fig_singlemode_sweep ===")
         fig_singlemode_sweep()
@@ -1792,3 +2391,6 @@ if __name__ == "__main__":
 
     print("=== fig_pade_xib_sweep ===")
     fig_pade_xib_sweep()
+
+    print("=== fig_twomode_growing_w1_timedomain ===")
+    fig_twomode_growing_w1_timedomain()

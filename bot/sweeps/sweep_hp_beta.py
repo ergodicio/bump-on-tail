@@ -7,10 +7,23 @@ For each (u_b, eps) grid point:
   3. Fit γ_eff from the late-time slope of log|E(t)|.
 
 The HP closure (Hammett-Perkins 1990) uses pade_coefficients(3) applied to
-the N=3 (u, E, U_0, U_1, U_2) state with U_3 closed.
+the N=3 (u, E, U_0, U_1, U_2) state with U_3 closed.  HP is linear and
+would normally be solved exactly via eigendecomposition, but is run here
+with pade_evolve(..., method="rk45") so both fluid closures (HP and direct
+beta) are genuinely time-stepped the same way -- direct beta has no choice
+(nonlinear), so this keeps the comparison apples-to-apples rather than
+giving HP a free exact solve.
 
 The Direct-β closure uses the exact kinetic ratio β(ξ_b) = U_2/U_0 at the
 effective ξ_b = U_1/U_0, giving exact dispersion on the eigenmode manifold.
+
+CAVEAT (found while cross-checking against direct eigenvalues elsewhere):
+fit_gamma's t_fit_min=25 window is not always long enough for HP's 5
+eigenmodes to fully separate from a generic delta-E IC -- e.g. at
+u_b=5, eps=0.05 this sweep's fitted overshoot reads ~31%, but the true
+eigenvalue overshoot (bot.fluid.fluid_modes at k*) is only ~5%. Treat
+gamma_hp/overshoot_hp here as approximate; for a trustworthy per-point
+number, compare against the direct eigenvalue instead.
 """
 
 from __future__ import annotations
@@ -34,12 +47,27 @@ def fit_gamma(t: np.ndarray, E: np.ndarray, t_fit_min: float = 25.0) -> float:
 
 
 def run_cell(u_b: float, eps: float,
-             t_end: float = 60.0, n_t: int = 601,
+             t_end_min: float = 60.0, t_fit_min: float = 25.0,
+             n_efold: float = 5.0, dt: float = 0.1,
              amp: float = 1e-3) -> dict:
-    """Time-domain γ_eff for kinetic / HP Padé N=3 / Direct β at peak k."""
+    """Time-domain γ_eff for kinetic / HP Padé N=3 / Direct β at peak k.
+
+    t_end is chosen per-cell so the fit window [t_fit_min, t_end] always
+    spans at least n_efold e-foldings of the kinetic growth rate (gamma_kin
+    varies ~7x across the (u_b, eps) grid, e.g. 0.035 at u_b=3,eps=0.01 vs
+    0.29 at u_b=5,eps=0.20; a fixed t_end=60 gave the fast-growing cells
+    ~10 e-foldings to separate the growing mode from the generic-delta-E
+    IC's transient, but the slow-growing cells only ~1-2, biasing their
+    fitted gamma_eff -- e.g. -3.4% at u_b=3,eps=0.01 with a fixed window,
+    vs <0.1% once the window is long enough).  t_end_min keeps the floor at
+    the old default for cells where 5 e-foldings fit well inside it.
+    """
     ks, ws_kin, i_max = kinetic_peak(u_b, eps)
     k = ks[i_max]
+    gamma_kin_peak = ws_kin[i_max].imag
 
+    t_end = max(t_end_min, t_fit_min + n_efold / gamma_kin_peak)
+    n_t = int(t_end / dt) + 1
     t_grid = np.linspace(0.0, t_end, n_t)
 
     # Generic δE IC: only E≠0
@@ -50,12 +78,12 @@ def run_cell(u_b: float, eps: float,
     a_hp = pade_coefficients(3)
 
     E_kin  = kinetic_evolve(k, u_b, eps, t_grid, y0_kin)
-    E_hp   = pade_evolve(k, u_b, eps, a_hp, t_grid, y0_n3)
+    E_hp   = pade_evolve(k, u_b, eps, a_hp, t_grid, y0_n3, method="rk45")
     E_dir  = direct_u2_evolve(k, u_b, eps, t_grid, y0_n2)
 
-    g_kin = fit_gamma(t_grid, E_kin)
-    g_hp  = fit_gamma(t_grid, E_hp)
-    g_dir = fit_gamma(t_grid, E_dir)
+    g_kin = fit_gamma(t_grid, E_kin, t_fit_min=t_fit_min)
+    g_hp  = fit_gamma(t_grid, E_hp,  t_fit_min=t_fit_min)
+    g_dir = fit_gamma(t_grid, E_dir, t_fit_min=t_fit_min)
 
     def _over(g):
         return (g - g_kin) / g_kin if g_kin > 0 else np.nan

@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Notes: time-domain tests of the slab-ITG dispersion relation</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Notes: time-domain tests of the slab-ITG dispersion
+relation</h1>
+</header>
+<h1
+id="notes-time-domain-tests-of-the-slab-itg-dispersion-relation-hammettperkins">Notes:
+time-domain tests of the slab-ITG dispersion relation
+(Hammett–Perkins)</h1>
+<p>Branch: <code>slab_itg_timedomain</code>. Code:
+<code>bot/slab_itg.py</code>; drivers
+<code>bot/figs/fig_slab_itg_growth.py</code>,
+<code>bot/figs/fig_slab_itg_timedomain.py</code>.</p>
+<p>Goal: rigorous initial-value tests of the slab-ITG problem from
+<code>Slab_ITG_Closure_Relations.pdf</code> (following HP PRL 64, 3019
+(1990)): solve the parallel slab DKE in Fourier space <strong>in the
+time domain</strong>, and compare against the fluid moment hierarchy
+solved in the time domain with the direct beta closure (plus HP
+heat-flux and direct-alpha closures for context). This goes beyond
+<code>bot/itg_test.py</code>, which only substitutes Z-function
+approximations into the frequency-domain response R_s.</p>
+<h2 id="model-and-normalization">1. Model and normalization</h2>
+<p>Slab DKE (source notes eq. 1–3), perturbations ~ exp(i k_y y + i
+k_par z − iωt), Maxwellian f0 with ∂f0/∂x = f0 [1/L_n + (mv²/2T0 −
+3/2)/L_T]:</p>
+<pre><code>∂f/∂t + i k_par v_par f = i (eΦ/T0) ( ω_*[1 + η(mv²/2T0 − 3/2)] − k_par v_par ) f0</code></pre>
+<p>with ω_* = (T0/eB) k_y/L_n, η = L_n/L_T. v_perp enters only through
+the drive; integrating over the perpendicular Maxwellian (⟨mv⊥²/2T0⟩ =
+1) reduces the problem <strong>exactly</strong> to 1D with drive η(w² −
+1/2), w = v_par/(√2 v_ti):</p>
+<pre><code>∂g/∂t = −i w g + i φ ( ζ_*[1 + η(w² − 1/2)] − w ) F0(w),   F0 = e^{−w²}/√π</code></pre>
+<p>Units: t in (k_par √2 v_ti)^{-1}, ζ = ω/(k_par √2 v_ti), ζ_*
+likewise, φ = eΦ/T0i, τ = T0i/T0e. Boltzmann electrons ñ_e = +n0 eΦ/T0e
+(standard sign; the source PDF writes a minus sign in the electron
+relation, which is inconsistent with its own dispersion relation — see
+§5) give quasineutrality φ = U_0/τ with U_0 = ∫ g dw = ñ_i/n0.</p>
+<h2 id="kinetic-response-and-dispersion-relation">2. Kinetic response
+and dispersion relation</h2>
+<p>Eigenmode ansatz in the reduced DKE, using ∫F0/(w−ζ) = Z, ∫wF0/(w−ζ)
+= 1+ζZ, ∫w²F0/(w−ζ) = ζ + ζ²Z:</p>
+<pre><code>R(ζ) = −U_0/φ = 1 − η ζ ζ_* + [ζ − ζ_*(1 − η/2 + η ζ²)] Z(ζ)      (†)</code></pre>
+<p>Dispersion: D(ζ) = R(ζ) + τ = 0. This matches the source PDF eq. (4).
+Sanity limits: ζ_* = 0 gives R = 1 + ζZ (Vlasov slab); ζ → 0 gives R → 1
+(adiabatic); τ ≪ 1 recovers the ion-acoustic wave ζ² = 1/(2τ).</p>
+<p><strong>Marginal stability (analytic).</strong> On the real-ζ axis Im
+Z = √π e^{−ζ²} ≠ 0, so a marginal root needs both the Z-coefficient
+bracket and the polynomial part to vanish: ζ = (1+τ)/(η ζ_<em>) and ζ =
+ζ_</em>(1 − η/2 + ηζ²). Eliminating ζ:</p>
+<pre><code>η_th = 1 + sqrt( 1 + 2 τ (1 + τ) / ζ_*² )</code></pre>
+<p>At ζ_* = 1, τ = 1: <strong>η_th = 1 + √5 ≈ 3.236</strong>. The HP
+value η_th = 2 is the ζ_* → ∞ (ω ≪ ω_*) limit of this formula.</p>
+<p><strong>Discrepancy with <code>bot/itg_test.py</code>.</strong>
+<code>itg_test.py</code> (<code>_D_slab</code>) uses
+<code>R_s = 1 − η ζ_*  + [...]Z</code> — the first gradient term is
+missing a factor ζ relative to (†). The −ηζζ_* term is forced by the
+polynomial part of ζ_* η ∫ w² F0/(w−ζ) dw = ζ_* η (ζ + ζ²Z); it cannot
+be absorbed by any convention choice. With the legacy form the threshold
+at ζ_* = τ = 1 comes out as (1+τ)/ζ_* = 2, which is where the “kinetic
+threshold = 2” claim in <code>itg_test.py</code> came from. The
+discretized DKE (independent of any Z algebra) adjudicates — see
+§4.1.</p>
+<h2 id="fluid-hierarchy-sources-and-closures">3. Fluid hierarchy,
+sources, and closures</h2>
+<p>Taking w-moments U_n = ∫ wⁿ g dw of the reduced DKE (M_n = ∫wⁿF0: 1,
+0, 1/2, 0, 3/4):</p>
+<pre><code>dU_n/dt = −i U_{n+1} + i φ σ_n,   σ_n = ζ_*[M_n + η(M_{n+2} − M_n/2)] − M_{n+1}
+σ_0 = ζ_*        (η exactly cancels: M_2 − M_0/2 = 0)
+σ_1 = −1/2
+σ_2 = ζ_*(1+η)/2  (η first enters here: M_4 − M_2/2 = 1/2)</code></pre>
+<p><strong>Structural observation:</strong> the temperature-gradient
+drive first enters the hierarchy at the n = 2 (pressure) equation. Any
+N=2 fluid model — including the direct beta closure U_2 = β(U_1/U_0)U_0,
+β(z) = z² − 1/Z′(z) — is therefore <em>exactly η-independent</em>: it
+cannot contain ITG physics no matter how accurate β is. This is
+invisible in the frequency-domain Z-substitution test of
+<code>itg_test.py</code> (where “U2 exact” trivially reproduces the
+kinetic result because it substitutes the exact Z into R_s), and is the
+central reason the time-domain test is more rigorous: the Z-substitution
+is <strong>not</strong> equivalent to actually closing the driven moment
+hierarchy.</p>
+<p>Closures implemented (<code>bot/slab_itg.py</code>): * <strong>direct
+beta</strong> (N=2): U_2 = β(U_1/U_0) U_0 — as in
+<code>bot/closed_loop.py</code>. * <strong>direct alpha</strong> (N=3):
+U_3 = α(U_1/U_0) U_0, α(z) = z³ − z/Z′(z). *
+<strong>Hammett–Perkins</strong> (N=3, linear): q̃ = −n0 χ1 √2 v_t
+(ik/|k|) T̃ with χ1 = 2/√π. In moment variables (q̃ = n0T0v̄(2U_3 − 3U_1),
+T̃/T0 = 2U_2 − U_0): U_3 = (Γ/2)U_1 − i(χ1/2)(2U_2 − U_0), Γ = 3.
+Verified analytically and numerically that in the gradient-free limit
+this hierarchy reproduces HP’s 3-pole response R_3
+(<code>itg_test.R3_hp</code>) exactly (agreement to 6+ digits at
+spot-checked complex ζ).</p>
+<p>Note that on the ITG eigenmode U_1/U_0 = ζ + ζ_<em>/τ ≠ ζ (the
+ζ_</em> source shifts the moment ratio), so the direct closures β(r1),
+α(r1) — exact on the <em>gradient-free</em> eigenmode manifold — are
+being evaluated off their manifold.</p>
+<h2 id="numerical-methods">4. Numerical methods</h2>
+<ul>
+<li><strong>Kinetic:</strong> velocity grid w ∈ [−W, W], N_w points
+(default 600, W=8); dg_j/dt = −i w_j g_j + i S(w_j)(Δw Σg)/τ. Modes via
+eigendecomposition (ζ = i·eigval, growing ⇔ Im ζ &gt; 0); time evolution
+via eigendecomposition (matrix exponential), same approach as
+<code>bot/kinetic.py</code> / <code>bot/closed_loop.py</code>.
+Recurrence time 2π/Δw ≈ 235 (600 pts) ≫ fit windows.</li>
+<li><strong>HP fluid:</strong> 3×3 linear system,
+eigendecomposition.</li>
+<li><strong>Direct beta / alpha:</strong> nonlinear (homogeneous
+degree-1) RHS, RK45 (rtol 1e-9), with the same |U_1/U_0| ≤ 12 safeguard
+as <code>bot/closed_loop.py</code>.</li>
+<li>Growth/frequency extracted from U_0(t) by log-magnitude and
+unwrapped-phase slopes over the second half of the record
+(<code>fit_mode</code>).</li>
+<li>Generic IC: density perturbation g0 = amp·F0(w) (fluid: U_0 = amp,
+U_2 = amp/2 from the same F0 shape, U_1 = 0).</li>
+</ul>
+<h3 id="verification-results-ζ_-1-τ-1">4.1 Verification results (ζ_* =
+1, τ = 1)</h3>
+<p>Discretized-DKE most-unstable eigenvalue vs roots of the two
+dispersion variants:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>η</th>
+<th>D_kinetic (†) root</th>
+<th>legacy (itg_test) root</th>
+<th>DKE matrix (N_w=400)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.0</td>
+<td>no growing root</td>
+<td>0.804 + 0.151i</td>
+<td>no growing mode</td>
+</tr>
+<tr>
+<td>3.5</td>
+<td>0.62366 + 0.05175i</td>
+<td>0.871 + 0.170i</td>
+<td>0.62368 + 0.05172i</td>
+</tr>
+<tr>
+<td>4.0</td>
+<td>0.63554 + 0.14041i</td>
+<td>0.919 + 0.181i</td>
+<td>0.63554 + 0.14041i</td>
+</tr>
+<tr>
+<td>5.0</td>
+<td>0.66137 + 0.29021i</td>
+<td>0.982 + 0.194i</td>
+<td>0.66137 + 0.29021i</td>
+</tr>
+</tbody>
+</table>
+<p>The matrix eigenvalues (no Z-function algebra involved) confirm (†)
+to 4–5 digits and confirm the threshold sits between η = 3.0 and 3.5
+(analytic 1+√5 ≈ 3.236), <strong>not</strong> at 2. The legacy form is
+unstable at η = 2.5–3 where the actual DKE has no growing mode.</p>
+<p>Time-domain fits reproduce the eigenvalues to 5 digits (η = 4.5):
+kinetic fit 0.64828 + 0.21920i vs root 0.64828 + 0.21920i; HP fluid fit
+0.61192 + 0.20395i vs eigenvalue 0.61192 + 0.20395i.</p>
+<h2 id="findings">5. Findings</h2>
+<ol type="1">
+<li><strong><code>itg_test.py</code> dispersion bug:</strong> the first
+gradient term of R_s must be 1 − ηζζ_<em>, not 1 − ηζ_</em>.
+Consequently the kinetic slab-ITG threshold at ζ_* = 1, τ = 1 is η_th =
+1 + √5 ≈ 3.236, not 2. η_th → 2 only as ζ_* → ∞. (The source PDF eq. (4)
+is correct; its eq. (5) and the Boltzmann-electron sign stated above it
+are internally inconsistent — quasineutrality with ñ_e = +n0eΦ/T0e gives
+D = R + τ, which is the form whose roots the discretized DKE
+reproduces.)</li>
+<li><strong>HP 3-moment closure works in the time domain:</strong> with
+the exact-hierarchy sources and U_3 = (3/2)U_1 − i(χ1/2)(2U_2 − U_0),
+the fluid growth rate tracks the kinetic one to ~5–10% above threshold
+(e.g. η = 5: γ = 0.268 vs 0.290) and its threshold is close to the
+kinetic 3.236.</li>
+<li><strong>Direct beta closure (N=2) fails structurally for
+ITG:</strong> the η drive cannot enter the (U_0, U_1) system; it
+converges to an η-independent damped drift-type mode (fit ζ ≈ −1.62 −
+0.31i at ζ_* = 1, τ = 1) at every η. The frequency-domain claim “U2
+exact = kinetic” in <code>itg_test.py</code> is an artifact of
+Z-substitution, not a property of the closed moment system.</li>
+<li><strong>Direct alpha closure (N=3) is qualitatively wrong for
+ITG:</strong> it grows far too fast (η = 4.5: γ ≈ 0.60 vs kinetic 0.22)
+because α(U_1/U_0) is exact only on the gradient-free manifold, and the
+ITG sources shift U_1/U_0 off that manifold (U_1/U_0 = ζ + ζ_*/τ on the
+true eigenmode). Closures that are provably exact for the
+bump-on-tail/Landau problem do not transfer to the driven ITG hierarchy;
+the HP closure — matched to the response function rather than to
+per-mode moment ratios — does.</li>
+</ol>
+<h2 id="figure-results">6. Figure results</h2>
+<h3
+id="botfiguresfig_slab_itg_growth.png-driver-botfigsfig_slab_itg_growth.py"><code>bot/figures/fig_slab_itg_growth.png</code>
+(driver <code>bot/figs/fig_slab_itg_growth.py</code>)</h3>
+<p>γ(η) and ω_r(η) at ζ_* = 1, τ = 1 (curves: dispersion roots /
+eigenvalues; markers: time-domain fits of U_0(t) from the
+density-perturbation IC). Data:
+<code>bot/runs/slab_itg_growth.npz</code>.</p>
+<ul>
+<li>Kinetic time-domain fits sit exactly on the DKE-derived dispersion
+curve (†) on <strong>both</strong> sides of threshold — the damped fits
+at η = 2.5, 3.0 (γ = −0.170, −0.050) continue the ITG branch smoothly
+through marginality at η_th = 3.236. The legacy (itg_test) curve is
+nowhere consistent with the initial-value kinetic solution: it predicts
+growth from η ≈ 2.1 and γ ≈ 0.18–0.19 saturating at large η, while the
+actual mode reaches γ = 0.41 by η = 6.</li>
+<li>HP fluid (Γ=3) tracks the kinetic ITG branch closely on both sides
+of threshold (η = 4: 0.132 vs 0.140; η = 6: 0.379 vs 0.414; threshold
+within ~1% of 3.236). Γ = 5/3 destroys this: spurious growth from η ≈
+2.4 and a much steeper γ(η) — consistent with HP’s argument for Γ =
+3.</li>
+<li>Direct beta (N=2): γ ≡ −0.267, ω_r ≡ −1.655 at every η
+(η-independent, as required by the hierarchy structure). No ITG.</li>
+<li>Direct alpha (N=3): spuriously unstable at <em>all</em> η scanned,
+including η = 1 (γ = +0.28) where the kinetic system is strongly damped;
+γ grows to ~0.74 at η = 6, nearly double kinetic. Also its ω_r branch is
+wrong (≈ 0.3–0.5 with the wrong trend).</li>
+</ul>
+<p>At η ≤ 2 the kinetic fit picks up a fast-damped branch (ζ ≈ −2.1 −
+0.20i) rather than the ITG branch — with the density IC the ITG-branch
+residue is tiny there; the fitted point is a real feature of the
+initial-value evolution, not a solver artifact.</p>
+<h3
+id="botfiguresfig_slab_itg_timedomain.png-driver-botfigsfig_slab_itg_timedomain.py"><code>bot/figures/fig_slab_itg_timedomain.png</code>
+(driver <code>bot/figs/fig_slab_itg_timedomain.py</code>)</h3>
+<p>|ñ_i/n0|(t) at η = 2.5, 3.5, 4.5, 6.0, common density IC, with
+exp(γ_kin t) guides. Data:
+<code>bot/runs/slab_itg_timedomain.npz</code>.</p>
+<ul>
+<li>Kinetic and HP-fluid traces overlay through the initial transient
+and the asymptotic phase; the guide slope matches the kinetic trace
+exactly.</li>
+<li>η = 2.5 (stable): kinetic and HP both show the damped oscillatory
+ITG branch; direct beta decays monotonically on its own drift branch;
+direct alpha grows by 11 decades over t = 60 — a spurious instability of
+the closure, not present in the kinetic system.</li>
+<li>Above threshold the direct-alpha trace grows at roughly twice the
+kinetic rate everywhere; direct beta decays identically in every panel
+(η-independent).</li>
+</ul>
+<h2 id="takeaway">7. Takeaway</h2>
+<p>The frequency-domain Z-substitution test (<code>itg_test.py</code>)
+is not a faithful proxy for closure performance on slab ITG: (i) its R_s
+had a typo that moved the kinetic threshold from 1+√5 to 2, and (ii)
+substituting a closure’s Z approximation into R_s implicitly assumes the
+closure commutes with the gradient drive, which the driven moment
+hierarchy shows is false — the exact gradient-free closures (beta,
+alpha) fail qualitatively in the initial-value problem, while the HP
+heat-flux closure (built as a response-function approximation with the
+drive entering every moment equation exactly) performs as advertised.
+Rigorous closure tests for ITG must be run as initial-value problems on
+the driven hierarchy.</p>
+<h2 id="comparison-with-the-bump-on-tail-testing-strategy">8. Comparison
+with the bump-on-tail testing strategy</h2>
+<p>The BoT problem was <em>already</em> tested in the time domain
+(<code>bot/closed_loop.py</code>, <code>bot/sweeps/*</code>): s-space
+kinetic matrix vs the closed moment hierarchy with Padé/HP, direct-beta,
+direct-alpha, and NN closures, generic-δE and eigenmode/two-mode ICs,
+fitted γ_eff. The slab-ITG machinery here deliberately mirrors that
+strategy component-for-component:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>ingredient</th>
+<th>BoT (<code>kinetic.py</code>, <code>closed_loop.py</code>)</th>
+<th>slab ITG (<code>slab_itg.py</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>kinetic ground truth</td>
+<td>s-grid Vlasov–Poisson matrix, eigendecomposition</td>
+<td>w-grid DKE matrix, eigendecomposition</td>
+</tr>
+<tr>
+<td>field response</td>
+<td>dynamical bulk (u, E) oscillator (Langmuir)</td>
+<td>quasineutral: φ = U_0/τ, slaved instantaneously</td>
+</tr>
+<tr>
+<td>hierarchy drive</td>
+<td>E enters rows n ≥ 1 (n M_{n−1} E); n = 0 row undriven</td>
+<td>gradient sources at <strong>every</strong> row (σ_0 = ζ_<em>, σ_1 =
+−1/2, σ_2 = ζ_</em>(1+η)/2)</td>
+</tr>
+<tr>
+<td>on-manifold ratio</td>
+<td>U_1/U_0 = ξ_b exactly</td>
+<td>U_1/U_0 = ζ + ζ_*/τ ≠ ζ</td>
+</tr>
+<tr>
+<td>closure status</td>
+<td>direct β/α <strong>exact</strong> per eigenmode</td>
+<td>direct β/α off-manifold even for a pure eigenmode</td>
+</tr>
+<tr>
+<td>dispersion check</td>
+<td>D_kin root ↔︎ matrix eig ↔︎ time fit</td>
+<td>same triple check (§4.1)</td>
+</tr>
+</tbody>
+</table>
+<p>Note <code>pade_coefficients(3)</code> = [iχ1/2, 3/2, −iχ1] — the BoT
+“Padé N=3” closure IS the HP 3-pole heat-flux closure, so the identical
+closure can be run on both problems.</p>
+<p><strong>Side-by-side result</strong>
+(<code>bot/figures/fig_bot_vs_itg_closures.png</code>, driver
+<code>bot/figs/fig_bot_vs_itg_closures.py</code>, data
+<code>bot/runs/bot_vs_itg_closures.npz</code>; BoT at u_b = 5, ε = 0.05,
+k = 0.24, δE IC; ITG at ζ_* = τ = 1, η = 4.5, δn IC):</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>closure</th>
+<th>BoT fitted mode (kin: 0.91910 + 0.17001i)</th>
+<th>ITG fitted mode (kin: 0.64828 + 0.21920i)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HP 3-pole</td>
+<td>0.92025 + 0.17861i (γ +5.1%)</td>
+<td>0.61192 + 0.20395i (γ −7.0%)</td>
+</tr>
+<tr>
+<td>direct β (N=2)</td>
+<td>0.91910 + 0.17001i (exact)</td>
+<td>−1.615 − 0.314i (decays; no ITG)</td>
+</tr>
+<tr>
+<td>direct α (N=3)</td>
+<td>0.91910 + 0.17001i (exact)</td>
+<td>0.350 + 0.598i (spurious, ~2.7× γ)</td>
+</tr>
+</tbody>
+</table>
+<p>The closure ranking <strong>flips</strong> between problems. On BoT
+the per-mode direct closures are exact by construction and HP is the ~5%
+approximation; on ITG the direct closures inherit an uncontrolled
+off-manifold error from the gradient drive and fail qualitatively, while
+HP degrades only mildly (5% → 7%). This is the faithful, like-for-like
+comparison: the same closures, the same initial-value strategy, and the
+difference in outcome is attributable purely to how the drive enters the
+hierarchy — i.e., it is a property of the closures, not of the testing
+methodology. Implication for the BoT program: closures learned/validated
+on the undriven (BoT/Landau) manifold should be expected to transfer to
+driven problems only if the closure inputs are augmented to carry the
+drive (e.g. features beyond U_1/U_0, or response-function-matched forms
+like HP’s).</p>
+<h2
+id="repairing-the-direct-closure-the-ζ-shift-and-the-itg-manifold-ratio">9.
+Repairing the direct closure: the ζ̂-shift and the ITG-manifold
+ratio</h2>
+<p>The failure mode identified in §5 suggests a fix: on the ITG
+eigenmode the exact n = 0 moment equation plus quasineutrality give
+U_1/U_0 = ζ + ζ_*/τ, so the mode frequency is recoverable from the
+moments as</p>
+<pre><code>ζ̂ = U_1/U_0 − ζ_*/τ.</code></pre>
+<p>Two repair levels were implemented (<code>bot/slab_itg.py</code>,
+<code>variant=</code> argument of <code>direct_beta_evolve</code> /
+<code>direct_alpha_evolve</code>; driver
+<code>bot/figs/fig_slab_itg_direct_variants.py</code>, data
+<code>bot/runs/slab_itg_direct_variants.npz</code>):</p>
+<p><strong>(a) Shift only</strong> — U_2 = β(ζ̂)U_0 with the
+gradient-free β. Analytically, the closed N=2 dispersion becomes
+ζ(ζ+ζ_<em>/τ) − 1/(2τ) = β(ζ), i.e. 1 − 2ζζ_</em> + (ζ − 2ζ_*ζ²)Z(ζ) + τ
+= 0 — exactly the kinetic dispersion <strong>frozen at η = 2</strong>.
+The shift fixes the frequency argument but η still never enters the
+system, so it remains η-independent: time-domain fits sit at ζ ≈
+0.61–0.64 − 0.32…0.35i at every η (the η=2 kinetic root is 0.6086 −
+0.3132i), always damped. Not a usable ITG closure.</p>
+<p><strong>(b) Shift + ITG-manifold closure function</strong> — replace
+β with the ratio the kinetic eigenmode actually has. With I_0 = Z,
+I_{n+1} = ζI_n + M_n, the manifold moments are U_n/φ = ζ_<em>(1−η/2)I_n
++ ζ_</em>ηI_{n+2} − I_{n+1}, and</p>
+<pre><code>β_itg(ζ; ζ_*, η) = (U_2/U_0)|_manifold ,   α_itg = (U_3/U_0)|_manifold</code></pre>
+<p>evaluated at ζ̂. The drive now lives inside the closure — resolving
+the §3 structural objection (η enters the N=2 system through β_itg).</p>
+<p>Exactness: the closed-system characteristic equations ζ(ζ+ζ_<em>/τ) −
+1/(2τ) = β_itg(ζ) (N=2) and ζ[ζ(ζ+ζ_*/τ) − 1/(2τ)] + ζ_</em>(1+η)/(2τ) =
+α_itg(ζ) (N=3) are satisfied by the kinetic root to machine precision
+(checked at η = 4.5: |char| ~ 4e-15).</p>
+<p>Spectral structure (Newton root sweep over the UHP, ζ_* = τ = 1):</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>η</th>
+<th>kinetic root</th>
+<th>N=2 β_itg UHP roots</th>
+<th>N=3 α_itg UHP roots</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.5</td>
+<td>none (stable)</td>
+<td>none</td>
+<td>0.250 + 1.299i</td>
+</tr>
+<tr>
+<td>4.5</td>
+<td>0.648 + 0.219i</td>
+<td>0.648 + 0.219i only</td>
+<td>0.648+0.219i AND 0.250+1.639i</td>
+</tr>
+<tr>
+<td>6.0</td>
+<td>0.688 + 0.414i</td>
+<td>0.688 + 0.414i only</td>
+<td>0.688+0.414i AND 0.250+1.854i</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>N=2 β_itg is exact AND spectrally clean</strong>: its only
+growing root is the kinetic one, and none below threshold. Time-domain
+fits from a generic density IC reproduce the kinetic mode to 4–5 digits
+at every η ∈ [2.5, 6] including the damped branch (η = 2.5: −0.169 vs
+kinetic −0.170). This is the correct generalization of the BoT direct
+closure to slab ITG.</li>
+<li><strong>N=3 α_itg is exact but unstable</strong>: a spurious root at
+Re ζ = 0.25 with γ ≈ 1.1–1.9 grows even where the kinetic system is
+stable and dominates every IC tried (including the eigenmode-projected
+one) — the same exact-but-unstable pathology as the BoT paper §4 NN
+blow-up. The spurious root is fully analytic: it is a zero of the
+prefactor polynomial P_3 = ζ_<em>ζ² − ζ/2 + ζ_</em>(1+η)/2 in the
+factorized characteristic equation (Appendix A.5), giving Re ζ =
+1/(4ζ_<em>) exactly (hence the observed 0.250) and γ = √(2ζ_</em>²(1+η)
+− 1/4)/(2ζ_*), matching the observed values to all digits.</li>
+<li>Caveat: at η ≲ 2 the kinetic initial-value evolution is dominated by
+a fast-damped branch (fit ζ ≈ −2.1 − 0.20i) that the N=2 closed system
+does not contain; β_itg instead sits on its own near-marginal root there
+(ζ ≈ 0.126 − 0.006i at η = 1.5). Deep in the stable regime the closure
+reproduces the ITG branch, not the full multi-branch transient.</li>
+</ul>
+<p>Implication for the NN-closure program: the function an ITG-capable
+NN closure must learn is β_itg(ζ̂; ζ_*, η) — i.e. the closure inputs must
+include the drive parameters (or equivalently features that resolve
+them), and the N=2 level is preferable to N=3, which is spectrally
+poisoned even with the exact manifold closure.</p>
+<h2
+id="appendix-a-derivation-of-the-itg-manifold-closure-β_itg">Appendix A:
+derivation of the ITG-manifold closure β_itg</h2>
+<h3 id="a.1-eigenmode-solution-of-the-reduced-dke">A.1 Eigenmode
+solution of the reduced DKE</h3>
+<p>On a single eigenmode g, φ ~ e^{−iζt} the reduced DKE (§1)</p>
+<pre><code>∂g/∂t = −i w g + i φ S(w),   S(w) = ( ζ_*[1 + η(w² − 1/2)] − w ) F0(w)</code></pre>
+<p>becomes algebraic: −ζ g = −w g + φ S(w), i.e.</p>
+<pre><code>g(w) = φ S(w) / (w − ζ).                                        (A1)</code></pre>
+<p>This is the exact velocity-space shape of the perturbation on the
+mode; all manifold quantities below are moments of (A1).</p>
+<h3 id="a.2-manifold-moments-two-equivalent-ways">A.2 Manifold moments,
+two equivalent ways</h3>
+<p><strong>(i) Via Hilbert-transform integrals.</strong> Define I_n(ζ) =
+∫ wⁿ F0/(w − ζ) dw. Writing wⁿ⁺¹ = wⁿ(w − ζ) + ζwⁿ gives the
+recurrence</p>
+<pre><code>I_0 = Z(ζ),    I_{n+1} = ζ I_n + M_n        (M_n = ∫wⁿF0: 1, 0, 1/2, 0, 3/4, …)</code></pre>
+<p>(Z is the Faddeeva-continued plasma dispersion function, valid in
+both half-planes). Expanding S(w) in (A1):</p>
+<pre><code>U_n/φ = ζ_*(1 − η/2) I_n + ζ_* η I_{n+2} − I_{n+1}.             (A2)</code></pre>
+<p>This is what <code>manifold_Un_over_phi</code> implements.</p>
+<p><strong>(ii) Via the moment equations.</strong> Equivalently, the
+eigenmode form of the exact hierarchy dU_n/dt = −iU_{n+1} + iφσ_n (§3)
+gives the <em>manifold recurrence</em></p>
+<pre><code>U_{n+1} = ζ U_n + σ_n φ,     σ_0 = ζ_*,  σ_1 = −1/2,  σ_2 = ζ_*(1+η)/2.  (A3)</code></pre>
+<p>Both routes agree identically ((A2) satisfies (A3) by the I_n
+recurrence).</p>
+<h3 id="a.3-closed-forms-in-terms-of-the-response-function">A.3 Closed
+forms in terms of the response function</h3>
+<p>Since U_0/φ = −R(ζ) by definition of the response (†), iterating (A3)
+gives compact closed forms:</p>
+<pre><code>U_1/U_0 = ζ + ζ_* φ/U_0                = ζ − ζ_*/R
+β_itg   ≡ U_2/U_0 = ζ(U_1/U_0) − φ/(2U_0)   = ζ² − (ζζ_* − 1/2)/R(ζ)     (A4)
+α_itg   ≡ U_3/U_0 = ζ β_itg + ζ_*(1+η) φ/(2U_0)
+                                        = ζ β_itg − ζ_*(1+η)/(2R(ζ))     (A5)</code></pre>
+<p>(verified against (A2) to ~1e-15). <strong>Gradient-free
+limit:</strong> at ζ_* = 0, R = 1 + ζZ = −Z′/2, so (A4) → ζ² − 1/Z′ =
+β(ζ) and (A5) → ζ³ − ζ/Z′ = α(ζ): the BoT closures are recovered
+exactly. All of the drive dependence of the manifold closure enters
+through R(ζ; ζ_<em>, η) and the explicit ζ_</em> terms.</p>
+<h3 id="a.4-the-frequency-estimate-ζ">A.4 The frequency estimate ζ̂</h3>
+<p>The first line of (A4) evaluated at the <em>eigenmode of the coupled
+system</em> (where quasineutrality fixes R = −τ, i.e. φ/U_0 = 1/τ)
+gives</p>
+<pre><code>U_1/U_0 = ζ + ζ_*/τ    ⇒    ζ̂ = U_1/U_0 − ζ_*/τ = ζ,</code></pre>
+<p>which is the shift used as the closure argument. (Off the coupled
+eigenmode, U_1/U_0 = ζ − ζ_<em>/R(ζ) ≠ ζ + ζ_</em>/τ, so ζ̂ is exact only
+where the dispersion relation holds — transients incur a controlled
+ansatz error.)</p>
+<h3 id="a.5-exactness-and-spectral-structure-of-the-closed-systems">A.5
+Exactness and spectral structure of the closed systems</h3>
+<p>Substituting the closures into the closed-system characteristic
+equations and using (A4)–(A5), both factor through the kinetic
+dispersion function:</p>
+<pre><code>N=2:  ζ(ζ + ζ_*/τ) − 1/(2τ) − β_itg(ζ)
+      = (ζζ_* − 1/2) (R + τ) / (τ R)                            (A6)
+
+N=3:  ζ[ζ(ζ + ζ_*/τ) − 1/(2τ)] + ζ_*(1+η)/(2τ) − α_itg(ζ)
+      = P_3(ζ) (R + τ) / (τ R),   P_3 = ζ_*ζ² − ζ/2 + ζ_*(1+η)/2  (A7)</code></pre>
+<p>So the eigenvalues of the closed fluid systems are exactly the
+kinetic dispersion roots (R + τ = 0), <strong>plus the zeros of the
+prefactor polynomial</strong> (minus poles at R = 0). This explains the
+§9 numerics completely:</p>
+<ul>
+<li><strong>N=2:</strong> P_2 = ζζ_* − 1/2 has the single real zero ζ =
+1/(2ζ_<em>) — no growing spurious mode ever. The β_itg N=2 closure is
+not merely “exact on the eigenmode”: its dispersion relation is
+</em>equivalent* to the kinetic one (up to an isolated marginal point on
+the real axis).</li>
+<li><strong>N=3:</strong> P_3 has the complex-conjugate pair ζ = [1/2 ±
+i√(2ζ_*²(1+η) − 1/4)] / (2ζ_<em>), one of which is always in the UHP. At
+ζ_</em> = 1 this is Re ζ = 1/4 exactly — the “curious” 0.250 observed
+numerically — with γ = √(2(1+η) − 1/4)/2: γ(η=2.5, 4.5, 6) = 1.29904,
+1.63936, 1.85405, matching the observed spurious roots to all digits.
+The spurious instability is thus an analytic artifact of where the
+closure identity degenerates (the drive part of the n = 2 row), not a
+numerical issue and not kinetic physics; it grows like √η and always
+outruns the ITG mode.</li>
+</ul>
+<p>The same factorization viewpoint applied at general N says: the
+direct manifold closure at level N is spectrally safe iff P_N(ζ) has no
+UHP zeros — a checkable a-priori criterion. For slab ITG only N=2
+passes.</p>
+<h2 id="spurious-root-anatomy-hp-vs-the-direct-manifold-closures">10.
+Spurious-root anatomy: HP vs the direct manifold closures</h2>
+<p>(Driver <code>bot/figs/fig_slab_itg_hp_spectrum.py</code>, figure
+<code>bot/figures/fig_slab_itg_hp_spectrum.png</code>, data
+<code>bot/runs/slab_itg_hp_spectrum.npz</code>.)</p>
+<p>The Appendix A factorization suggests a taxonomy: a closure’s
+spectrum can deviate from kinetic either by <em>approximating the
+response</em> R(ζ) or by <em>adding prefactor zeros</em> to an exact
+response. HP and the direct manifold closures sit at opposite
+corners:</p>
+<p><strong>HP (Γ=3) — approximate response, no extra roots.</strong> The
+closed system is linear and 3×3, so it has exactly three roots, all of
+them approximations of true kinetic roots: one tracks the ITG/drift
+branch (γ error 5–10% above threshold), one tracks the fast-damped drift
+branch (ζ ≈ −2), and one deeply damped root (ζ ≈ 0.3 − 0.8i…1.3i) stands
+in for the Landau continuum. There is no spurious growth anywhere in the
+(ζ_*, η) plane scanned.</p>
+<p>Two sharper statements, both verified numerically:</p>
+<ol type="1">
+<li><strong>The Z-substitution identity is exact for Γ = 3.</strong> The
+eigenvalues of the driven HP fluid matrix coincide with the roots of
+R_s(Z → Z₃) + τ (the corrected <code>itg_test.py</code> methodology) to
+10⁻⁹ at all (η, root) pairs checked. So the frequency-domain
+substitution test, invalid for the nonlinear direct closures (§7), is
+rigorous for the HP closure.</li>
+<li><strong>HP Γ=3 reproduces the kinetic threshold exactly at every
+ζ_</strong>* — η_th agrees with 1 + √(1 + 2τ(1+τ)/ζ_<em>²) to 4+
+decimals across ζ_</em> ∈ [0.3, 4] (bisection on the 3×3 eigenvalues).
+This is structural, not a numerical coincidence: given the substitution
+identity, a marginal root is real, and since Im Z₃ ≠ 0 on the real axis
+(the χ₁ term — HP’s Landau-damping surrogate), Im D = 0 forces the same
+Z-independent bracket condition ζ = ζ_<em>(1 − η/2 + ηζ²) as
+kinetically, and Re D = 0 then gives the same polynomial condition 1 + τ
+− ηζζ_</em> = 0. <strong>Any closure that (i) satisfies the substitution
+identity and (ii) retains Im Z_closure ≠ 0 on the real axis inherits the
+exact kinetic marginal boundary</strong>, while its growth rates away
+from marginality carry the response-approximation error. (This
+generalizes HP’s η_th observation to all ζ_*, and is the same mechanism
+behind the closure-independent thresholds seen in the fixed
+<code>itg_test.py</code> scan.)</li>
+</ol>
+<p><strong>Γ = 5/3 — breaks the substitution identity, spuriously
+unstable.</strong> With Γ ≠ 3 the closure row no longer respects the
+exact Maxwellian recurrence, the substitution identity fails (matrix
+eigenvalues ≠ substitution roots by O(1)), and requirement (i) above is
+lost: the Γ=5/3 system’s threshold at ζ_* = 1 is η_th ≈ 1.03 (growth is
+weak at first, γ = 0.07 at η = 1.5, which is why §6 visually reported
+onset ≈ 2.4) — spuriously unstable across 1 ≲ η ≲ 3.24 where the kinetic
+system is stable, and η_th drops to ~0.7 at large ζ_<em>. Also note the
+corrected-<code>itg_test</code> Brag curve (Z → Z₃^{Γ=5/3} substitution)
+does </em>not* represent the actual Γ=5/3 fluid system — the real system
+is substantially worse than the substitution suggests.</p>
+<p><strong>Direct manifold closures — exact response, prefactor
+zeros.</strong> Mirror image of HP: the tracked root is exact (not 5–10%
+off), but char_N = P_N(ζ)(R+τ)/(τR) adds the zeros of P_N. N=2 is clean
+(P_2 real zero only; its threshold curve coincides with kinetic
+identically); N=3 adds the always-dominant UHP zero of P_3 with onset
+η_sp = max(0, 1/(8ζ_<em>²) − 1) — i.e. unstable at essentially all η for
+ζ_</em> ≳ 0.35.</p>
+<p>Summary table (τ = 1):</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>closure</th>
+<th>tracked-root error</th>
+<th>extra/spurious growth</th>
+<th>threshold η_th(ζ_*)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HP Γ=3</td>
+<td>γ 5–10% above threshold</td>
+<td>none found</td>
+<td>exact (structural)</td>
+</tr>
+<tr>
+<td>HP Γ=5/3</td>
+<td>O(1)</td>
+<td>one of its 3 roots grows from η ≈ 1 (ζ_*=1)</td>
+<td>badly low</td>
+</tr>
+<tr>
+<td>direct β_itg N=2</td>
+<td>exact</td>
+<td>none (P_2 zero is real)</td>
+<td>exact (identical dispersion)</td>
+</tr>
+<tr>
+<td>direct α_itg N=3</td>
+<td>exact</td>
+<td>P_3 zero, γ ~ √η, always dominant</td>
+<td>≈ 0</td>
+</tr>
+<tr>
+<td>direct β/α (gradient-free), shifted or not</td>
+<td>n/a</td>
+<td>η-independent / spurious</td>
+<td>none / wrong</td>
+</tr>
+</tbody>
+</table>
+<p>Practical reading: for a <em>linear</em> closure the thing to certify
+is the substitution identity (then thresholds are free and the only cost
+is response error in γ); for a <em>direct/nonlinear</em> closure the
+thing to certify is the prefactor polynomial P_N (then the response is
+free and the only risk is spurious prefactor zeros). β_itg at N=2 and HP
+Γ=3 each pass their respective certificate; α_itg at N=3 and Γ=5/3 each
+fail theirs.</p>
+<h2
+id="aaa-rational-approximation-a-learnedfit-alternative-to-hps-closure">11.
+AAA rational approximation: a learned/fit alternative to HP’s
+closure</h2>
+<p>(Single-eigenmode test driver
+<code>bot/figs/fig_slab_itg_landau_singlemode.py</code>, figure
+<code>bot/figures/fig_slab_itg_landau_singlemode.png</code>; closure
+code <code>bot.closures.pade.aaa_coefficients_n4</code> and
+<code>bot.closures.aaa_pad</code>.)</p>
+<h3 id="motivation">11.1 Motivation</h3>
+<p>§10 explains <em>why</em> HP gets a genuinely wrong damping rate away
+from marginality: its 3-pole closure is derived by matching only two
+points — the large-|ζ| asymptotic expansion of Z′(ζ) and the small-ζ
+Taylor value/ slope at ζ = 0 — with nothing constraining the fit in
+between. Checked directly on a below-threshold Landau-damped root (ζ_* =
+1, τ = 1, η = 2, ζ_root = −2.190 − 0.192i, found via the new
+<code>min_damped_root</code> — the mirror image of
+<code>max_growing_root</code>, searching the lower half-plane): HP’s
+rational R(ζ) is 23–68% off from the exact Z′(ζ) at the ζ values
+relevant to this session’s benchmark modes, only dropping to a few
+percent once |ζ| ≳ 4–6. <code>scipy.interpolate.AAA</code> (SciPy ≥
+1.15) replaces the two-point match with a genuine data fit over a
+domain, so the natural question is whether a higher-order, AAA-derived
+closure closes that gap.</p>
+<h3
+id="first-attempt-aaa-folded-into-the-existing-n-moment-closure-family">11.2
+First attempt: AAA folded into the existing N-moment closure family</h3>
+<p>The direct approach is to stay inside the same closure family HP
+already uses — <code>U_N = Σ_i a_i U_i</code>, generalized from N=3 to
+N=4 — and choose the four complex coefficients <code>a</code> by
+fitting, rather than by two-point matching.
+<code>scipy.interpolate.AAA</code> fit to Z′(ξ) along the real axis (ξ ∈
+[−6, 6]; a 2D complex-plane fit was tried first but fails badly — Z′(ζ)
+grows ~exponentially as Im(ζ) → −∞, e.g. |Z′| ~ 4.5×10⁻² at ζ=4 vs
+~9×10³ at ζ=−2.5i, so AAA’s greedy absolute-error point selection is
+completely dominated by the large-magnitude corner and ignores the O(1)
+region entirely) gives an excellent fit: ~1–5% relative error at the
+session’s benchmark ζ values, vs HP’s 23–68% there.</p>
+<p>That accuracy does <strong>not</strong> carry over when forced into
+the <code>a_i</code> family, and the reason is structural, not a fitting
+failure: <code>fluid_U0(ξ; a)</code> (the closure’s own implied
+response) has only N complex degrees of freedom, while a general
+rational function with N poles needs 2N−1 (poles <em>and</em> residues
+both free — the residues are <em>not</em> independently choosable here,
+they’re fixed once the poles are fixed by the physical moment
+recursion). Two independent checks confirm the cap:</p>
+<ul>
+<li>Setting the closure’s own characteristic-polynomial roots equal to
+AAA’s fitted poles (elementary symmetric functions of the poles) gives
+~20–25% error at the benchmark ζ values — no better than HP.</li>
+<li>Building the physically-implied weights from those same poles via
+the dressed-pole basis
+(<code>bot.closures.dressed_pole.basis_moments</code>) gives the same
+~20–25%, confirming it’s the family, not the matching method.</li>
+</ul>
+<p>A direct nonlinear least-squares fit of <code>a_0..a_3</code> (not
+constrained to interpolate any particular points) against Z′(ξ) on the
+real axis — <code>scipy.optimize.least_squares</code>,
+<code>'lm'</code>, HP-extended initial guess with random restarts — gets
+much closer to what the family can actually achieve: median 1.6% error
+on-axis (matching AAA there), 6–21% at the session’s off-axis complex
+test points (vs HP’s 23–68% at the same points). This is
+<code>aaa_coefficients_n4()</code> in <code>bot/closures/pade.py</code>,
+usable as a drop-in <code>a</code> for both
+<code>bot.fluid.fluid_system</code> (BoT) and the new
+<code>bot.slab_itg.fluid_pade_system</code>/<code>fluid_pade_evolve</code>
+(the N-moment generalization of <code>fluid_hp_system</code>, verified
+byte-identical to it when fed HP’s own coefficients). On the ζ_root =
+−2.190−0.192i single-mode benchmark it visibly tracks the true decay far
+more closely than HP throughout a 30-time-unit window, but with a real,
+bounded residual bias (amplitude ratio to truth settles in [0.28, 0.86],
+vs HP’s drifting from 1.4 to 2.9) — a genuine improvement, not a solved
+problem.</p>
+<h3 id="m4-fixed-multi-pole-state-space-closure-the-real-fix">11.3 M4′:
+fixed multi-pole state-space closure (the real fix)</h3>
+<p>The cap in §11.2 is the moment-ladder closure <em>form</em>, not AAA.
+Getting AAA’s actual accuracy requires leaving that form: represent the
+response as an explicit sum of poles with independently-fit residues,
+realized as auxiliary linear ODE state — one “pad” variable per pole —
+rather than as a static <code>Σ a_i U_i</code> relation. (This is “M4′”
+in <code>dressed_pole_closure_handoff.md</code>’s post-M3′ addendum;
+M3′, the amortized- NN pole-inversion scheme from the same document, was
+tried earlier this session and found impractical — RHS roughness from
+the fit/gate/fallback machinery defeated the adaptive integrator, 1.7M
+RHS evaluations for a short window and still not converged. M4′ replaces
+“fit poles every step” with “fit poles once, offline,” which sidesteps
+that failure mode entirely: no runtime optimizer, no gates, no adaptive
+integrator.)</p>
+<p><strong>Construction</strong> (<code>bot/closures/aaa_pad.py</code>).
+Because ITG quasineutrality is algebraic (φ = U₀/τ, no separate field
+equation), the pad alone is a complete closed system — no separate U₁,
+U₂, U₃ needed. For a set of poles {p_j} and residues {c_j} with U₀/φ ≈
+Σ_j c_j/(ζ−p_j):</p>
+<pre><code>dw_j/dt = −i p_j w_j − i c_j φ,      U_0 = Σ_j w_j,      φ = U_0/τ</code></pre>
+<p>which is linear and time-invariant, so it propagates by matrix
+exponential — no RK45, no per-step evaluation at all.</p>
+<p>Two design choices, both following the handoff doc:</p>
+<ol type="1">
+<li><strong>What to fit.</strong> The doc’s <em>preferred</em> option is
+to fit the universal, drive-independent Z′(ζ) and append the pad only to
+the <em>tail</em> of a truncated physical moment ladder (“coupled to the
+chain end”), keeping the ζ_<em>/η drive in the explicit lower-moment
+source terms exactly as HP does. That requires deriving how the pad
+couples back into a partially-retained ladder and was not completed this
+session. Instead the </em>fallback* option was used: fit AAA directly to
+this problem’s own U_0/φ = −R_kinetic(ζ; ζ_<em>, η) (drive baked into
+the fit). The pad is then a complete standalone closure for that one
+(ζ_</em>, η), not reusable across a parameter scan without refitting —
+acceptable since the fit itself is cheap (~0.18 s for 15 poles),
+matching the doc’s own note that per-background refitting is
+“milliseconds.”</li>
+<li><strong>Pole check.</strong> AAA does not know about causality — a
+pole with Im(p_j) ≥ 0 would make an undriven pad mode spontaneously
+grow, which is unphysical for a linear response of a stable Maxwellian
+background. <code>fit_aaa_pad_itg</code> checks this after every fit
+and, if needed, discards offending poles and re-solves the residues by
+linear least squares on the retained set. For ζ_* = 1, τ = 1, η = 2
+(<code>max_terms=21</code>): AAA converges to 15 poles, all with Im(p_j)
+∈ [−2.47, −2.36] — comfortably inside the lower half-plane, nothing
+pruned.</li>
+</ol>
+<p><strong>Accuracy.</strong> Static fit quality: ~machine precision
+(relative error ~10⁻¹³–10⁻¹² over the real-axis validation grid
+<em>and</em> at ζ_root itself — unsurprising given 15 poles fit a
+function whose magnitude only varies over roughly a factor of 10 along
+the real axis for this (ζ_*, η), unlike the earlier universal-Z′
+2D-domain attempt). Time-domain, same single- eigenmode benchmark as
+§11.2: the amplitude ratio to the true kinetic decay stays in [1.0000,
+1.0002] for the entire 30-time-unit window — three to four orders of
+magnitude closer to truth than either HP or the N=4 moment-ladder
+fit.</p>
+<p><strong>IC construction.</strong> <code>aaa_pad_ic</code> sets
+<code>w_j(0) = c_j·amp/(ζ_0 − p_j)</code>, i.e. the pad’s own
+steady-state response to a hypothetical continuous forcing at frequency
+ζ_0 — the natural, well-defined way to ask “what does this pad think a
+pure mode at ζ_0 looks like,” giving
+<code>U_0(0) = amp · (AAA fit of U_0/φ at ζ_0)</code>, accurate to the
+fit’s own error at that point (here, machine precision).</p>
+<h3 id="summary">11.4 Summary</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>closure</th>
+<th>dof vs. target</th>
+<th>fit domain</th>
+<th>error at ζ_root = −2.190−0.192i (t=0→30)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HP (Γ=3)</td>
+<td>3 complex, 2-point matched</td>
+<td>ζ=0 Taylor + ζ→∞ asymptotic</td>
+<td>ratio to truth drifts 1.4 → 2.9</td>
+</tr>
+<tr>
+<td>AAA N=4 (least-squares, §11.2)</td>
+<td>4 complex, moment-ladder-constrained</td>
+<td>real axis, Z′(ξ)</td>
+<td>ratio settles in [0.28, 0.86]</td>
+</tr>
+<tr>
+<td>AAA pad (M4′, §11.3)</td>
+<td>15 complex poles, unconstrained (state-space)</td>
+<td>real axis, −R_kinetic(ζ;ζ_*,η)</td>
+<td>ratio in [1.0000, 1.0002]</td>
+</tr>
+</tbody>
+</table>
+<p>The moment-ladder closure family (HP’s own form, and its N=4
+extension) is fundamentally dof-limited regardless of how well its
+coefficients are fit; the fixed-pole state-space realization removes
+that ceiling entirely and — for a single benchmark eigenmode —
+reproduces the kinetic decay to the AAA fit’s own tolerance. Not yet
+run: the fuller M4′ “gauntlet” from the handoff doc (two-mode beat, the
+generic-IC case that previously hung M3-pre, wall-clock/RHS-eval
+accounting vs. M3′), and the doc’s preferred option A (universal-Z′
+closure with the pad appended only to a truncated ladder, reusable
+across (ζ_*, η) without refitting).</p>
+<h3
+id="limitation-generic-non-eigenmode-ics-are-not-yet-representable">11.5
+Limitation: generic (non-eigenmode) ICs are not yet representable</h3>
+<p>(Driver <code>bot/figs/fig_slab_itg_aaa_pad_eigenmode.py</code>,
+figure <code>bot/figures/fig_slab_itg_aaa_pad_eigenmode.png</code>.)</p>
+<p>§11.3’s pad tracks only U₀ — there is no separate U₁, U₂ state —
+because ITG quasineutrality only ever needs U₀. That is fine for a
+single- eigenmode IC (§11.3), but it means the pad has no way to encode
+an IC where U₁, U₂ are specified independently of U₀, e.g. the generic
+density-only IC
+(<code>density_ic_fluid</code>/<code>density_ic_kinetic</code>: U₀=amp,
+U₁=0, U₂=amp/2) used throughout <code>fig_bot_vs_itg_closures.py</code>
+— including its ITG-1 case (ζ_*=1, τ=1, η=10), the same case redone here
+on an eigenmode IC instead, since that is what the current pad can
+actually do.</p>
+<p>A first attempt at fixing this — retain the physical U₀, U₁, U₂
+ladder with its exact σ_n-driven dynamics unchanged, and close U₃ at
+every step by a fixed-pole least-squares projection onto the ITG-driven
+manifold basis (<code>manifold_Un_over_phi</code> at the same 14 AAA
+poles, not the gradient-free <code>basis_moments</code>) — <strong>fails
+badly</strong> on the density IC: with 14 poles and only 3 retained
+moments the per-step weight solve is underdetermined,
+<code>np.linalg.lstsq</code>’s minimum-norm solution is not physically
+meaningful, and the resulting U₃ instantly overdamps the state (fitted γ
+comes out <strong>negative</strong> — wrong sign — vs. the true
+γ=+0.775; <code>bot.closures.aaa_pad.aaa_pad_ladder_evolve</code>, kept
+for the record but not used in any figure). This is not simply a bug to
+fix with better regularization: the density IC has genuine
+continuum/non-pole content (a smooth F₀-shaped velocity perturbation is
+not a finite sum of simple poles), which is exactly the “remainder
+channel” the original handoff doc flags as a separate, harder,
+stretch-goal problem (M5) — no finite- pole closure, fit however well,
+represents it exactly. Properly closing this gap needs either the doc’s
+preferred option A done correctly (pad coupled to the chain end, not a
+per-step re-projection of the whole state) or an explicit
+remainder/continuum channel; neither is done here.</p>
+<p>On the eigenmode IC (ζ_root = 0.7839+0.7747i, same ζ_*, τ, η as
+ITG-1): AAA pad and direct-β both track the true growing rate to within
+plotting/fit precision throughout t=0→25 (25 e-foldings, amplitude
+growing five orders of magnitude), while HP’s ~9.7% low growth-rate
+error compounds into roughly two orders of magnitude of amplitude error
+by the end of the window — visually obvious on the semilog plot.</p>
+</body>
+</html>
