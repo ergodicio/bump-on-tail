@@ -392,7 +392,7 @@ def fig_u2_landau_timedomain(nn_path: Path = RUN_DIR / "nn_u2_r1.eqx") -> None:
                  r"(generic $\delta E$ IC)", fontsize=12)
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_timedomain.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -522,7 +522,7 @@ def fig_u2_landau_dispref(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_dispref.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -660,7 +660,7 @@ def fig_u2_landau_damping(nn_path: Path = RUN_DIR / "nn_u2_r1.eqx") -> None:
     fig.suptitle("N=2 closure: Landau-damped minority species", fontsize=12)
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_damping.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -817,7 +817,7 @@ def fig_u2_landau_eigenmode(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_eigenmode.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -997,7 +997,7 @@ def fig_u2_landau_strong(nn_u2_path: Path = RUN_DIR / "nn_u2_r1.eqx",
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_strong.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -1190,7 +1190,7 @@ def fig_u2_landau_twomode(nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx") 
     )
     fig.tight_layout()
     out = FIG_DIR / "fig_u2_landau_twomode.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=400, bbox_inches="tight")
     print(f"saved {out}")
     plt.close(fig)
 
@@ -1258,22 +1258,22 @@ def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
           f"omega1={omega1:.3f} (xi_b1={xi_b1:.3f}), "
           f"omega2={omega2:.3f} (xi_b2={xi_b2:.3f})")
 
-    ax.semilogy(t_grid, np.abs(E_ref), "ko", ms=3.0,
+    ax.semilogy(t_grid, np.abs(E_ref), "ko", ms=1.6,
                 markevery=20, zorder=8,
-                label="Kinetic ground truth")
-    ax.semilogy(t_grid, np.abs(E_pade), color="C1", lw=1.2, ls="--", zorder=4.5,
-                alpha=0.9, label=r"Hammett-Perkins ($N=3$)")
-    ax.semilogy(t_grid, np.abs(E_hun4), color="C4", lw=1.2, ls=":", zorder=3,
+                label="Kinetic")
+    ax.semilogy(t_grid, np.abs(E_pade), color="C1", lw=0.7, ls="--", zorder=4.5,
+                alpha=0.9, label=r"HP ($N{=}3$)")
+    ax.semilogy(t_grid, np.abs(E_hun4), color="C4", lw=0.7, ls=":", zorder=3,
                 alpha=0.9, label=r"Hunana ($N=4$)")
-    ax.semilogy(t_grid, np.abs(E_opt3), color="C2", lw=1.2, ls="-.", zorder=2,
+    ax.semilogy(t_grid, np.abs(E_opt3), color="C2", lw=0.7, ls="-.", zorder=2,
                 alpha=0.9, label=r"Padé opt ($N=3$)")
-    ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=1.2, ls="-.", zorder=3,
+    ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=0.7, ls="-.", zorder=3,
                 alpha=0.9, label=r"Padé opt ($N=4$)")
-    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=1.5, ls="-", zorder=4,
+    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=0.8, ls="-", zorder=4,
                 label=r"EKR ($N=2$)")
-    ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=1.2, ls="-", zorder=4,
+    ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=0.7, ls="-", zorder=4,
                 alpha=0.9, label=r"NN ($N=3$)")
-    ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=2.0, ls="-", zorder=5,
+    ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=1.0, ls="-", zorder=5,
                 label=r"NN ($N=4$)")
 
     # Clip y-axis to the actual data range (bottom: finite-value floor of
@@ -1314,23 +1314,27 @@ def fig_u2_landau_twomode_single(
     import matplotlib as mpl
 
     cases = [
-        (1.0, 0.50, 0.05, "(a)"),
-        (1.5, 0.40, 0.05, "(b)"),
+        (1.5, 0.40, 0.05, ""),
     ]
 
     # Computer Modern (LaTeX-style) fonts to match the other paper figures.
     with mpl.rc_context({"font.family": "serif", "mathtext.fontset": "cm",
-                         "font.size": 16, "axes.titlesize": 16}):
-        fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.0))
+                         "font.size": 7, "axes.titlesize": 7}):
+        fig, ax = plt.subplots(1, 1, figsize=(3.4, 1.92))
+        axes = [ax]
         for i, (ax, (u_b, k, eps, title)) in enumerate(zip(axes, cases)):
             _plot_landau_twomode_case(ax, u_b, k, eps, title,
                                       model_n4_super, a_hp,
-                                      legend_loc="lower left" if i == 0
-                                      else None)
+                                      legend_loc=None)
 
-        fig.tight_layout()
+        fig.tight_layout(rect=[0, 0.17, 1, 1])
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="lower center", ncol=3,
+                   fontsize=4.8, labelspacing=0.25, handlelength=1.3,
+                   handletextpad=0.4, columnspacing=1.0, frameon=False,
+                   bbox_to_anchor=(0.5, 0.01))
         out = FIG_DIR / "fig_u2_landau_twomode_single.png"
-        fig.savefig(out, dpi=150, bbox_inches="tight")
+        fig.savefig(out, dpi=400, bbox_inches="tight")
         print(f"saved {out}")
         plt.close(fig)
 
@@ -1424,8 +1428,7 @@ def fig_u2_landau_singlemode(
     import matplotlib as mpl
 
     cases = [
-        (1.0, 0.50, 0.05, "(a)"),
-        (1.5, 0.40, 0.05, "(b)"),
+        (1.5, 0.40, 0.05, ""),
     ]
 
     # Computer Modern (LaTeX-style) fonts to match the other paper figures.
@@ -1440,7 +1443,7 @@ def fig_u2_landau_singlemode(
 
         fig.tight_layout()
         out = FIG_DIR / "fig_u2_landau_singlemode.png"
-        fig.savefig(out, dpi=150, bbox_inches="tight")
+        fig.savefig(out, dpi=400, bbox_inches="tight")
         print(f"saved {out}")
         plt.close(fig)
 
