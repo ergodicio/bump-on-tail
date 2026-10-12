@@ -392,7 +392,8 @@ def fit_coefficients(N: int,
                      f_scale: float = 1.0,
                      n_restarts: int = 12,
                      seed: int = 0,
-                     verbose: bool = False) -> OptFit:
+                     verbose: bool = False,
+                     xi: np.ndarray | None = None) -> OptFit:
     """Fit the closure coefficients to the kinetic response on the rectangle.
 
     target='alpha' (default)
@@ -412,8 +413,15 @@ def fit_coefficients(N: int,
 
     If the fit lands with a pole in the upper half plane, a penalized
     nonlinear refit is run from that point (`pole_penalty`, `pole_margin`).
+
+    xi, if given, replaces the uniform sample (e.g. the eigenmode frequencies
+    of the NN training states, bot.closures.homog_nn.make_dataset).
     """
-    xi = sample_rectangle(n_samples, re_range, im_range, seed=seed)
+    if xi is None:
+        xi = sample_rectangle(n_samples, re_range, im_range, seed=seed)
+    else:
+        xi = np.asarray(xi, dtype=complex)
+        n_samples = len(xi)
 
     if target == "alpha":
         B, y = alpha_basis(xi, N)
@@ -570,6 +578,28 @@ _CACHED: dict[int, np.ndarray] = {
                  +22.4856508139 + 0.0000000000j,
                  -0.0000000000 - 6.4854786151j]),
 }
+
+
+# Same objective, fit at the eigenmode frequencies of the homogeneous-NN
+# training states without mirror pairs (homog_nn.make_dataset(N, 400_000,
+# seed=0, frac_mirror=0.0, return_zetas=True); 600191 frequencies).  Used by
+# the PRX manuscript.
+_CACHED_NN_FREQ: dict[int, np.ndarray] = {
+    3: np.array([+0.0000000000 + 0.9093528338j,
+                 +2.0264692241 + 0.0000000000j,
+                 -0.0000000000 - 1.7922778048j]),
+    4: np.array([-1.9743053346 + 0.0000000000j,
+                 +0.0000000000 + 4.9642714024j,
+                 +5.3063482891 + 0.0000000000j,
+                 -0.0000000000 - 2.9500004238j]),
+}
+
+
+def opt_coefficients_nn_freq(N: int) -> np.ndarray:
+    """Cached coefficients fit at the NN training frequencies (_CACHED_NN_FREQ)."""
+    if N not in _CACHED_NN_FREQ:
+        raise KeyError(f"no NN-frequency coefficients for N={N}")
+    return _CACHED_NN_FREQ[N].copy()
 
 
 def opt_coefficients(N: int) -> np.ndarray:

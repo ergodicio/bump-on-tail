@@ -1266,14 +1266,15 @@ def _plot_landau_twomode_case(ax, u_b, k, eps, title, model_n4_super, a_hp,
     ax.semilogy(t_grid, np.abs(E_hun4), color="C4", lw=0.7, ls=":", zorder=3,
                 alpha=0.9, label=r"Hunana ($N=4$)")
     ax.semilogy(t_grid, np.abs(E_opt3), color="C2", lw=0.7, ls="-.", zorder=2,
-                alpha=0.9, label=r"Padé opt ($N=3$)")
-    ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=0.7, ls="-.", zorder=3,
-                alpha=0.9, label=r"Padé opt ($N=4$)")
-    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=0.8, ls="-", zorder=4,
+                alpha=0.9, label=r"Learned Padé ($N=3$)")
+    ax.semilogy(t_grid, np.abs(E_opt4), color="C5", lw=0.7, ls=(0, (3, 1, 1, 1, 1, 1)),
+                zorder=3, alpha=0.9, label=r"Learned Padé ($N=4$)")
+    ax.semilogy(t_grid, np.abs(E_dir2), color="C0", lw=0.9, ls=(0, (8, 1.5)), zorder=4,
                 label=r"EKR ($N=2$)")
-    ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=0.7, ls="-", zorder=4,
-                alpha=0.9, label=r"NN ($N=3$)")
-    ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=1.0, ls="-", zorder=5,
+    ax.semilogy(t_grid, np.abs(E_nn3), color="C3", lw=0.8, ls="-", zorder=4,
+                alpha=0.9, marker="^", ms=3, mfc="none", mew=0.7,
+                markevery=(0.05, 0.1), label=r"NN ($N=3$)")
+    ax.semilogy(t_grid, np.abs(E_nn4s), color="C6", lw=1.3, ls="-", zorder=5,
                 label=r"NN ($N=4$)")
 
     # Clip y-axis to the actual data range (bottom: finite-value floor of
@@ -1334,6 +1335,42 @@ def fig_u2_landau_twomode_single(
                    handletextpad=0.4, columnspacing=1.0, frameon=False,
                    bbox_to_anchor=(0.5, 0.01))
         out = FIG_DIR / "fig_u2_landau_twomode_single.png"
+        fig.savefig(out, dpi=400, bbox_inches="tight")
+        print(f"saved {out}")
+        plt.close(fig)
+
+
+def fig_u2_landau_twomode_2panel(
+        nn_n4_super_path: Path = RUN_DIR / "n4_nn_super.eqx",
+        out_name: str = "fig_u2_landau_twomode_2panel.png") -> None:
+    """Double-column version of fig_u2_landau_twomode_single with both cases.
+
+    (a) u_b=1.0, k=0.50 and (b) u_b=1.5, k=0.40, eps=0.05; legend in (a).
+    """
+    from bot.closures.n4_nn import load_super as load_n4_super
+
+    model_n4_super = load_n4_super()
+    a_hp = pade_coefficients(3)
+
+    import matplotlib as mpl
+
+    cases = [
+        (1.0, 0.50, 0.05, "(a)"),
+        (1.5, 0.40, 0.05, "(b)"),
+    ]
+
+    with mpl.rc_context({"font.family": "serif", "mathtext.fontset": "cm",
+                         "font.size": 7, "axes.titlesize": 7}):
+        fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.3))
+        for ax, (u_b, k, eps, title) in zip(axes, cases):
+            _plot_landau_twomode_case(ax, u_b, k, eps, title,
+                                      model_n4_super, a_hp,
+                                      legend_loc=None)
+        axes[0].legend(fontsize=5.5, loc="lower left", ncol=2,
+                       labelspacing=0.25, handlelength=1.6, borderpad=0.3,
+                       columnspacing=1.0)
+        fig.tight_layout(w_pad=1.5)
+        out = FIG_DIR / out_name
         fig.savefig(out, dpi=400, bbox_inches="tight")
         print(f"saved {out}")
         plt.close(fig)

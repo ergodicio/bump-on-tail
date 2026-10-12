@@ -140,8 +140,13 @@ def _sphere_weights(rng, m):
 
 def make_dataset(N: int, n: int, seed: int = 0, frac_impulse: float = 0.0,
                  kap_range=(0.02, 40.0), lam: float = LAM, frac_single: float = 0.5,
-                 ext: bool = True):
-    """(features, U_state, Phi, U_N target, is_single) for n samples."""
+                 ext: bool = True, return_zetas: bool = False,
+                 frac_mirror: float = 0.5):
+    """(features, U_state, Phi, U_N target, is_single) for n samples.
+
+    With return_zetas, also the eigenmode (or drive) frequencies of the accepted
+    states, concatenated in sample order.
+    """
     rng = np.random.default_rng(seed)
     # with the potential in the state the direction carries N complex numbers,
     # so two modes are resolvable for N >= 3 (N >= 2M - 1)
@@ -151,6 +156,7 @@ def make_dataset(N: int, n: int, seed: int = 0, frac_impulse: float = 0.0,
     Phi = np.empty(n, dtype=complex)
     UN = np.empty(n, dtype=complex)
     single = np.zeros(n, dtype=bool)
+    zetas = []
     i = 0
     while i < n:
         if rng.random() < frac_impulse:
@@ -168,7 +174,7 @@ def make_dataset(N: int, n: int, seed: int = 0, frac_impulse: float = 0.0,
                 zs = [_draw_zeta(rng)]
             else:
                 zs = [_draw_zeta(rng), _draw_zeta(rng)]
-                if r < frac_single + 0.5 * (1 - frac_single):
+                if r < frac_single + frac_mirror * (1 - frac_single):
                     zs[1] = -np.conj(zs[0])
                 if abs(zs[0] - zs[1]) < 0.1:
                     continue
@@ -184,7 +190,10 @@ def make_dataset(N: int, n: int, seed: int = 0, frac_impulse: float = 0.0,
         Phi[i] = phi
         UN[i] = U[N]
         single[i] = is_single
+        zetas += list(zs)
         i += 1
+    if return_zetas:
+        return feats, Ustate, Phi, UN, single, np.array(zetas)
     return feats, Ustate, Phi, UN, single
 
 
@@ -260,9 +269,10 @@ def train(N: int, n_samples: int = 400_000, n_steps: int = 150_000, lr: float = 
           hidden=None,
           batch: int = 1024, seed: int = 0, lam: float = LAM, log_every: int = 5000,
           w_single: float = 3.0, frac_impulse: float = 0.0, pin: str = "none",
-          ext: bool = True):
+          ext: bool = True, frac_mirror: float = 0.5):
     feats, U, Phi, UN, single = make_dataset(N, n_samples, seed=seed, lam=lam,
-                                             frac_impulse=frac_impulse, ext=ext)
+                                             frac_impulse=frac_impulse, ext=ext,
+                                             frac_mirror=frac_mirror)
     S = (np.abs(U) ** 2).sum(1) + lam ** 2 * np.abs(Phi) ** 2
     w = np.where(single, w_single, 1.0)
     fx, Uj, Sj, UNj, wj = (jnp.asarray(feats), jnp.asarray(U), jnp.asarray(S), jnp.asarray(UN), jnp.asarray(w))
