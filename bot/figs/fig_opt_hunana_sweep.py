@@ -53,11 +53,11 @@ NCOLS = 4
 
 LABELS = {
     "hp3":      r"Hammett-Perkins ($N=3$)",
-    "opt3":     r"Padé opt ($N=3$)",
+    "opt3":     r"Learned Padé ($N=3$)",
     "hunana4":  r"Hunana ($N=4$)",
     "hunana4b": r"Hunana ($N=4$, 3+1)",
     "pade4":    r"Padé ($N=4$, Taylor)",
-    "opt4":     r"Padé opt ($N=4$)",
+    "opt4":     r"Learned Padé ($N=4$)",
     "nn3":      r"NN ($N=3$)",
     "nn4":      r"NN ($N=4$)",
     "beta2":    r"EKR ($N=2$)",
@@ -116,12 +116,28 @@ def error_maps(d, metric: str, eig: bool = False,
     return out
 
 
+def outline_cells(ax, mask, extent, **kw) -> None:
+    """Draw the cell edges separating True from False cells of an imshow grid."""
+    ny, nx = mask.shape
+    xe = np.linspace(extent[0], extent[1], nx + 1)
+    ye = np.linspace(extent[2], extent[3], ny + 1)
+    for i in range(ny):
+        for j in range(nx):
+            if j + 1 < nx and mask[i, j] != mask[i, j + 1]:
+                ax.plot([xe[j + 1]] * 2, [ye[i], ye[i + 1]], **kw)
+            if i + 1 < ny and mask[i, j] != mask[i + 1, j]:
+                ax.plot([xe[j], xe[j + 1]], [ye[i + 1]] * 2, **kw)
+
+
 def make_fig(metric: str = "relative", path: Path = NPZ,
              eig: bool = False, out_name: str | None = None,
-             ref: str = "fit") -> None:
+             ref: str = "fit", outline=None) -> None:
+    """outline: optional (n_u_b, n_eps) bool mask whose boundary is drawn on
+    every panel."""
     d = dict(np.load(path))
     u_b, eps = d["u_b_vals"], d["eps_vals"]
-    extent = [eps[0], eps[-1], u_b[0], u_b[-1]]
+    # cells in index units, labelled with the (nonuniform) grid values
+    extent = [-0.5, len(eps) - 0.5, -0.5, len(u_b) - 0.5]
     vmin, vmax = LIMITS[metric]
     maps = error_maps(d, metric, eig=eig, ref=ref)
 
@@ -137,6 +153,11 @@ def make_fig(metric: str = "relative", path: Path = NPZ,
         z = np.log10(np.maximum(maps[name], 10.0**vmin))
         im = ax.imshow(z, origin="lower", aspect="auto", extent=extent,
                        cmap=CMAP, vmin=vmin, vmax=vmax, interpolation="nearest")
+        if outline is not None:
+            outline_cells(ax, outline, extent, color="C0", lw=2.5, ls="--",
+                          solid_capstyle="butt")
+        ax.set_xticks(range(len(eps)), [f"{e:g}" for e in eps], fontsize=12)
+        ax.set_yticks(range(len(u_b)), [f"{u:g}" for u in u_b])
         # nonlinear closures get a coloured title so the architectural
         # boundary is visible at a glance
         ax.set_title(LABELS[name], color="k")

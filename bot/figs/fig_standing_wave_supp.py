@@ -31,16 +31,17 @@ def main() -> None:
          dict(color="C1", lw=0.7, ls="--", alpha=0.9, zorder=4.5)),
         (r"Hunana ($N=4$)", S.evolve(4, S.linear_closure(two_point_coefficients(4, 2))),
          dict(color="C4", lw=0.7, ls=":", alpha=0.9, zorder=3)),
-        (r"Padé opt ($N=3$)", S.evolve(3, S.linear_closure(opt_coefficients(3))),
+        (r"Learned Padé ($N=3$)", S.evolve(3, S.linear_closure(opt_coefficients(3))),
          dict(color="C2", lw=0.7, ls="-.", alpha=0.9, zorder=2)),
-        (r"Padé opt ($N=4$)", S.evolve(4, S.linear_closure(opt_coefficients(4))),
-         dict(color="C5", lw=0.7, ls="-.", alpha=0.9, zorder=3)),
+        (r"Learned Padé ($N=4$)", S.evolve(4, S.linear_closure(opt_coefficients(4))),
+         dict(color="C5", lw=0.7, ls=(0, (3, 1, 1, 1, 1, 1)), alpha=0.9, zorder=3)),
         (r"EKR ($N=2$)", S.evolve(2, S.ekr_closure),
-         dict(color="C0", lw=0.8, ls="-", zorder=4)),
+         dict(color="C0", lw=0.9, ls=(0, (8, 1.5)), zorder=4)),
         (r"NN ($N=3$)", S.evolve(3, lambda U: cl3(U, phi(U))),
-         dict(color="C3", lw=0.7, ls="-", alpha=0.9, zorder=4)),
+         dict(color="C3", lw=0.8, ls="-", alpha=0.9, zorder=4, marker="^", ms=3,
+              mfc="none", mew=0.7, markevery=(len(S.T) // 24, len(S.T) // 12))),
         (r"NN ($N=4$)", S.evolve(4, lambda U: cl4(U, phi(U))),
-         dict(color="C6", lw=1.0, ls="-", zorder=5)),
+         dict(color="C6", lw=1.3, ls="-", zorder=5)),
     ]
 
     print(f"k lambda_D = {S.K_LAMBDA_D}: Landau root omega = {om.real:.4f} {om.imag:+.4f}i")
@@ -73,8 +74,8 @@ def main() -> None:
         fig.tight_layout(rect=[0, 0.09, 1, 1])
         handles, labels = ax1.get_legend_handles_labels()
         fig.legend(handles, labels, loc="lower center", ncol=9, fontsize=5.6,
-                   labelspacing=0.25, handlelength=1.4, handletextpad=0.4,
-                   columnspacing=0.9, frameon=False, bbox_to_anchor=(0.5, 0.01))
+                   labelspacing=0.25, handlelength=2.6, handletextpad=0.4,
+                   columnspacing=0.6, frameon=False, bbox_to_anchor=(0.5, 0.01))
         fig.savefig(SAVE_PNG, dpi=400, bbox_inches="tight")
         plt.close(fig)
     print(f"saved {SAVE_PNG}")

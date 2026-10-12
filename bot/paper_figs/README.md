@@ -14,7 +14,7 @@ Run from the repository root, e.g.
 | 1 | `fig1_kappa_bot.py`    | `fig_kappa_bot.png`               | computed in-script |
 | 2 | `fig2_slab_itg.py`     | `fig_slab_itg_combined.png`       | `bot_vs_itg_closures.npz`, `slab_itg_growth.npz` |
 | 3 | `fig3_bot_sweep.py`    | `fig_hp_beta_sweep.png`           | `sweep_hp_beta.npz` |
-| 4 | `fig4_twomode.py`      | `fig_u2_landau_twomode_single.png`| NN checkpoints in `bot/runs/` |
+| 4 | `fig4_twomode.py`      | `homog/fig_u2_landau_twomode_single.png`, `homog/fig_u2_landau_twomode_2panel.png` | `homog_nn_n3.eqx`, `homog_nn_n4.eqx` |
 | 5 | `fig5_closure_sweep.py`| `fig_opt_hunana_sweep.png`        | `sweep_opt_hunana.npz` |
 
 Shared style (all paper figures): Computer Modern via matplotlib mathtext,
