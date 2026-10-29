@@ -4,22 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bump-on-tail"
-version = "0.1.0"
-description = "Neural closure models for the bump-on-tail instability."
+version = "0.2.0"
+description = "Reproduce the kinetic-closure figures in the PPCF manuscript"
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "jax",
-    "equinox",
-    "optax",
-    "numpy",
-    "scipy",
-    "matplotlib",
-]
+dependencies = ["numpy>=1.26", "scipy>=1.12", "matplotlib>=3.8"]
+
+[project.optional-dependencies]
+compute = ["jax>=0.5.3,<0.6", "equinox>=0.12.2,<0.13", "optax>=0.2.8,<0.3"]
+test = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
 include = ["bot*"]
 
-[project.optional-dependencies]
-gpu = [
-    "jax[cuda12]",
-]
+[tool.setuptools.package-data]
+bot = ["data/*.npz", "data/*.json", "models/*.eqx", "assets/*.png", "assets/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,21 @@
+{
+  "source_commit": "1fc7b4167aee968678262c712c86087df558fcae",
+  "inputs": {
+    "validation_kappa.npz": {
+      "source": "bot/runs/kappa_bot_cache.npz",
+      "source_sha256": "0d128766d57e9a1eecdd6a827b5ae13bfb102d9f344c379fa67b7322ea4e813a"
+    },
+    "validation_itg_trace.npz": {
+      "source": "bot/runs/bot_vs_itg_closures.npz",
+      "source_sha256": "b5cfd6ab04982807a1c5a62a47392f022446ed1d6265b895763313fe476a9ccd"
+    },
+    "validation_itg_scan.npz": {
+      "source": "bot/runs/slab_itg_growth.npz",
+      "source_sha256": "69dd9b2ea679463844e6b8c135133aca20a87e4f89accb76a8d2f5ba72521626"
+    },
+    "growth_scan.npz": {
+      "source": "bot/runs/sweep_opt_hunana_nomirror.npz",
+      "source_sha256": "4a6b4767ff2cd2314ce322adddf128a8380424675d65c02c83baa94c84bf8b8d"
+    }
+  }
+}

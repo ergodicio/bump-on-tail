@@ -1,0 +1,135 @@
+{
+  "manuscript": "BoT Closure Paper/main_ppcf.tex (PPCF resubmission)",
+  "base_commit": "4ddeb05ad81d8eeb3d9565b44b1574f9523bb65d",
+  "scientific_source_commit": "1fc7b4167aee968678262c712c86087df558fcae",
+  "figures": [
+    {
+      "number": 1,
+      "driver": "bot.figures.validation",
+      "inputs": [
+        "data/validation_kappa.npz",
+        "data/validation_itg_trace.npz",
+        "data/validation_itg_scan.npz"
+      ],
+      "filename": "fig_validation_ppcf_compact.pdf"
+    },
+    {
+      "number": 2,
+      "driver": "static asset",
+      "inputs": [
+        "assets/fig_equivariance_serif.png"
+      ],
+      "filename": "fig_equivariance_serif.png"
+    },
+    {
+      "number": 3,
+      "driver": "bot.figures.comparisons.coverage",
+      "inputs": [
+        "data/coverage.npz"
+      ],
+      "filename": "fig_xi_coverage_sim.png"
+    },
+    {
+      "number": 4,
+      "driver": "bot.figures.comparisons.scan",
+      "inputs": [
+        "data/growth_scan.npz",
+        "data/coverage.npz"
+      ],
+      "filename": "fig_opt_hunana_sweep_nomirror.png"
+    },
+    {
+      "number": 5,
+      "driver": "bot.figures.comparisons.twomode",
+      "inputs": [
+        "data/twomode.npz"
+      ],
+      "filename": "fig_u2_landau_twomode_2panel_nomirror.png"
+    },
+    {
+      "number": 6,
+      "driver": "bot.figures.comparisons.standing",
+      "inputs": [
+        "data/standing.npz"
+      ],
+      "filename": "fig_standing_wave_supp_nomirror.png"
+    }
+  ],
+  "inputs": {
+    "data/coverage.npz": {
+      "sha256": "0cef2738697d93eda366d261d961531828f12b902a5ee61f20e7029e5386634b",
+      "bytes": 452549
+    },
+    "data/growth_scan.npz": {
+      "sha256": "1e371c13465a6ca28135e24791298a8428b475b1448039f7cff486ce4de00d74",
+      "bytes": 6833
+    },
+    "data/scan_parameters.json": {
+      "sha256": "10939646b1ed2b12db8209fa34f15d8a2e684140c1342b5ec423f6e63df5c10e",
+      "bytes": 1564
+    },
+    "data/source_inputs.json": {
+      "sha256": "d757e9c801e89bd62c0bccb129aefe56533a0da27e6e5e953353bea909493e59",
+      "bytes": 800
+    },
+    "data/standing.npz": {
+      "sha256": "f0abb2a0d44e99955ef16e91c122ff6a8a8dc5070c2286d353f03fc6a982bd08",
+      "bytes": 178034
+    },
+    "data/twomode.npz": {
+      "sha256": "86463d67de51c6cf6402ed16c5490cd75d2ff6024f34d05f2539e91924daaca6",
+      "bytes": 304691
+    },
+    "data/validation_itg_scan.npz": {
+      "sha256": "69dd9b2ea679463844e6b8c135133aca20a87e4f89accb76a8d2f5ba72521626",
+      "bytes": 3603
+    },
+    "data/validation_itg_trace.npz": {
+      "sha256": "90eb90eeb253a970200c98df0542cb2fcfdb7d1a2672c52d3ccd75be0203a9db",
+      "bytes": 25651
+    },
+    "data/validation_kappa.npz": {
+      "sha256": "985a8b8d41de066bf30e16cbf99acc7eabfd134d97fd0606ad7ab5bbb1f38859",
+      "bytes": 54957
+    },
+    "models/homog_nn_n3_nomirror.eqx": {
+      "sha256": "e288d275ff5162dfa56d527c8f22f781cda4cc3595eb04b19d36ba8fbd1c5f63",
+      "bytes": 315440
+    },
+    "models/homog_nn_n4_nomirror.eqx": {
+      "sha256": "76a4958ab353ee7f5d6a21c0ff200054a5d64ee2881d1a2b914e351715c5e4b2",
+      "bytes": 323904
+    },
+    "assets/equivariance.json": {
+      "sha256": "2ba939582e5ddc79e98a630d44f0929c078b0c04b2954093daae32966eb41463",
+      "bytes": 229
+    },
+    "assets/fig_equivariance_serif.png": {
+      "sha256": "4340e4cf1f81a5628f5d2810d5663817bd4361365b494155926e17613ad68a65",
+      "bytes": 1128109
+    }
+  },
+  "newly_cached_arrays": {
+    "coverage": "Regenerated and checked against original Figure 3 driver",
+    "twomode": "Regenerated and checked against original Figure 5 driver",
+    "standing": "Regenerated and checked against original Figure 6 driver"
+  },
+  "training_protocol": {
+    "seed": 0,
+    "samples": 400000,
+    "steps": 150000,
+    "hidden": [
+      192,
+      192,
+      192
+    ],
+    "learning_rate": 0.002,
+    "batch": 1024,
+    "single_weight": 3,
+    "potential_weight": 1,
+    "single_fraction": 0.5,
+    "mirror_fraction": 0,
+    "impulse_fraction": 0
+  },
+  "schematic": "Final manuscript raster, copied without further changes; see assets/equivariance.json"
+}

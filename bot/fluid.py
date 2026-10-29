@@ -48,13 +48,3 @@ def fluid_system(k: float, u_b: float, eps: float, a: np.ndarray) -> np.ndarray:
 def fluid_modes(k: float, u_b: float, eps: float, a: np.ndarray) -> np.ndarray:
     """All mode frequencies omega = i * eigval(A). length = N + 2."""
     return 1j * np.linalg.eigvals(fluid_system(k, u_b, eps, a))
-
-
-def trace_fluid(ks, u_b, eps, a, ws_ref) -> np.ndarray:
-    """For each k, pick the fluid eigenmode closest to ws_ref[k] (continuation)."""
-    out = np.empty(len(ks), dtype=complex)
-    for i, k in enumerate(ks):
-        cands = fluid_modes(k, u_b, eps, a)
-        j = int(np.argmin(np.abs(cands - ws_ref[i])))
-        out[i] = cands[j]
-    return out

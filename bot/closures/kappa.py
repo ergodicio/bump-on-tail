@@ -48,8 +48,7 @@ def kappa_b(kappa: float) -> float:
 def kappa_norm(kappa: float) -> float:
     """C_kappa such that int F_kappa ds = 1."""
     b = kappa_b(kappa)
-    log_c = (gammaln(kappa + 1.0) - gammaln(kappa + 0.5)
-             - np.log(b) - 0.5 * np.log(np.pi))
+    log_c = gammaln(kappa + 1.0) - gammaln(kappa + 0.5) - np.log(b) - 0.5 * np.log(np.pi)
     return float(np.exp(log_c))
 
 
@@ -62,8 +61,12 @@ def F_kappa(s, kappa: float):
 def dF_kappa(s, kappa: float):
     """d F_kappa / ds."""
     b = kappa_b(kappa)
-    return (kappa_norm(kappa) * (-(kappa + 1.0))
-            * (1.0 + (s / b) ** 2) ** (-(kappa + 2.0)) * (2.0 * s / b**2))
+    return (
+        kappa_norm(kappa)
+        * (-(kappa + 1.0))
+        * (1.0 + (s / b) ** 2) ** (-(kappa + 2.0))
+        * (2.0 * s / b**2)
+    )
 
 
 def _scaled_residue(zeta: complex, kappa: int, power: int) -> complex:
@@ -76,17 +79,15 @@ def _scaled_residue(zeta: complex, kappa: int, power: int) -> complex:
     """
     k = int(kappa)
     b = kappa_b(kappa)
-    d2 = -1j * b - zeta            # (s - zeta) at s = -ib
+    d2 = -1j * b - zeta  # (s - zeta) at s = -ib
     total = 0.0 + 0.0j
     for j in range(k + 1):
         # d^j (s-ib)^-(k+1): coefficient (-1)^j (k+1)...(k+j), phase from -2i
-        c1 = ((-1.0) ** j) * float(np.prod([float(k + 1 + m)
-                                            for m in range(j)])) if j else 1.0
+        c1 = ((-1.0) ** j) * float(np.prod([float(k + 1 + m) for m in range(j)])) if j else 1.0
         t1 = c1 * (-2j) ** (-(k + 1 + j)) * b ** (k + 1 - j)
         # d^m (s-zeta)^-power = (-1)^m (power)...(power+m-1) (s-zeta)^-(power+m)
         m = k - j
-        c2 = ((-1.0) ** m) * float(np.prod([float(power + q)
-                                            for q in range(m)])) if m else 1.0
+        c2 = ((-1.0) ** m) * float(np.prod([float(power + q) for q in range(m)])) if m else 1.0
         t2 = c2 * d2 ** (-(power + m))
         total += comb(k, j) * t1 * t2
     return total / factorial(k)

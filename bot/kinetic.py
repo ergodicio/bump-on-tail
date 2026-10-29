@@ -16,9 +16,7 @@ Z'(xi) = -2 (1 + xi Z(xi))
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import root
 from scipy.special import wofz
-
 
 SQRT_PI = float(np.sqrt(np.pi))
 
@@ -46,8 +44,9 @@ def find_kinetic_mode(k, u_b, eps, omega0, max_iter: int = 20, tol: float = 1e-1
         D = kinetic_dispersion(omega, k, u_b, eps)
         if abs(D) < tol:
             break
-        dD = (kinetic_dispersion(omega + h, k, u_b, eps) -
-              kinetic_dispersion(omega - h, k, u_b, eps)) / (2 * h)
+        dD = (
+            kinetic_dispersion(omega + h, k, u_b, eps) - kinetic_dispersion(omega - h, k, u_b, eps)
+        ) / (2 * h)
         step = D / dD
         # guard against runaway steps
         if abs(step) > 0.5:
@@ -56,25 +55,17 @@ def find_kinetic_mode(k, u_b, eps, omega0, max_iter: int = 20, tol: float = 1e-1
     return omega
 
 
-def trace_kinetic(ks, u_b, eps, omega0=1.0 + 0.01j):
-    """Continuation in k: track one root from omega0."""
-    out = np.empty(len(ks), dtype=complex)
-    w = omega0
-    for i, k in enumerate(ks):
-        w = find_kinetic_mode(k, u_b, eps, w)
-        out[i] = w
-    return out
-
-
 # ----- s-space discretized kinetic system (gives all modes via eigvals) -----
+
 
 def s_grid(N_v: int, V: float = 6.0):
     s = np.linspace(-V, V, N_v)
     return s, s[1] - s[0]
 
 
-def kinetic_system_sspace(k: float, u_b: float, eps: float,
-                           N_v: int = 96, V: float = 6.0) -> np.ndarray:
+def kinetic_system_sspace(
+    k: float, u_b: float, eps: float, N_v: int = 96, V: float = 6.0
+) -> np.ndarray:
     """Linear ODE matrix in (u, E, F[s_0], ..., F[s_{N_v-1}]) space.
 
     F = f_b1 / n_b (perturbed beam, beam-frame velocity coords). Phase mixing
@@ -88,23 +79,29 @@ def kinetic_system_sspace(k: float, u_b: float, eps: float,
     A[0, 1] = -1.0
     A[1, 0] = +1.0
     A[1, 2:] = -eps * (u_b + s) * ds
-    src = (2.0 * s / SQRT_PI) * np.exp(-s**2)
+    src = (2.0 * s / SQRT_PI) * np.exp(-(s**2))
     for j in range(N_v):
         A[2 + j, 2 + j] = -1j * k * (u_b + s[j])
         A[2 + j, 1] = src[j]
     return A
 
 
-def kinetic_modes_sspace(k: float, u_b: float, eps: float,
-                          N_v: int = 96, V: float = 6.0) -> np.ndarray:
+def kinetic_modes_sspace(
+    k: float, u_b: float, eps: float, N_v: int = 96, V: float = 6.0
+) -> np.ndarray:
     """All omega = i * eigval(A_sspace). Robust most-unstable-mode finder."""
     return 1j * np.linalg.eigvals(kinetic_system_sspace(k, u_b, eps, N_v, V))
 
 
-def most_unstable_kinetic(k: float, u_b: float, eps: float,
-                           N_v: int = 96, V: float = 6.0,
-                           omega_re_lo: float = 0.3, omega_re_hi: float = 3.0
-                           ) -> complex:
+def most_unstable_kinetic(
+    k: float,
+    u_b: float,
+    eps: float,
+    N_v: int = 96,
+    V: float = 6.0,
+    omega_re_lo: float = 0.3,
+    omega_re_hi: float = 3.0,
+) -> complex:
     """Return the most-unstable Langmuir-like kinetic mode at k.
 
     Filters out the spurious phase-mixed modes (very large Im, very large Re)
