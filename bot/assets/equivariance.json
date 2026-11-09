@@ -1,0 +1,6 @@
+{
+  "kind": "static schematic",
+  "source": "BoT Closure Paper PPCF manuscript; slide 16 of Nonlinear kinetic closures",
+  "edits": "Bottom equation removed; serif lettering matched to paper figures",
+  "numerical_data": false
+}

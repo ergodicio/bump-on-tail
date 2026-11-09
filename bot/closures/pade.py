@@ -1,40 +1,7 @@
-"""Padé closure for the N-moment bump-on-tail beam fluid.
+"""Moment matching for the paper's HP and Hunana linear closures.
 
-Beam moment hierarchy from linearised Vlasov + integration by parts:
-    xi U_n - U_{n+1} = n M_{n-1} Phi      n = 0, ..., N-1
-with M_k = <s^k>_{f_b0} Maxwellian moments (M_0 = 1, M_1 = 0, M_2 = 1/2, ...).
-
-The kinetic beam response (derived from Vlasov with Maxwellian beam f_b0) is
-    U_0/Phi = Z'(xi_b)
-where Z' = -2(1 + xi Z(xi)) is the derivative of the plasma dispersion function
-and xi_b = (omega - k u_b)/(k v_b).  This is consistent with the kinetic
-dispersion  D = 1 - 1/omega^2 - (eps/k^2) Z'(xi_b) = 0  in kinetic.py.
-
-For N = 3, the linear closure U_3 = a_0 U_0 + a_1 U_1 + a_2 U_2 yields the
-rational approximant
-    U_0/Phi = (xi - a_2) / (xi^3 - a_2 xi^2 - a_1 xi - a_0)
-which always behaves as +1/xi^2 for large xi, matching the leading term of
-    Z'(xi) ~ 1/xi^2 + 3/(2 xi^4) + 15/(4 xi^6) + ...   (large-arg)
-
-HP (Hammett-Perkins 1990) construction for N = 3
--------------------------------------------------
-Following HP1990 (Eq. 9 with mu_1=0, Gamma=3, chi_1=2/sqrt(pi)):
-
-  1. Large-argument O(1/xi^4) term forces  a_1 = 3/2   (Gamma=3 analogue).
-  2. The relation  a_0 = -a_2/2  comes from the correct high-frequency
-     structure of the closure  (mu_1=0 analogue).
-  3. Matching Im[Z'(0+)] to model Landau damping gives  a_2 = -2i/sqrt(pi)
-     (chi_1 = 2/sqrt(pi) analogue).
-
-Result:
-    a = (a_0, a_1, a_2) = (i/sqrt(pi),  3/2,  -2i/sqrt(pi))
-
-Verification:
-  * Z'(0) = -2;   f(0) = a_2/a_0 = (-2i/sqrt(pi))/(i/sqrt(pi)) = -2  ✓
-  * Large arg:  f(xi) = 1/xi^2 + (3/2)/xi^4 + O(1/xi^6)  ✓
-  * Small arg:  f(xi) ≈ -2 - 2i*sqrt(pi)*xi  =  Z'(xi)|_{xi→0}  ✓
-
-For N != 3 a Taylor-at-zero matching to Z'(xi) is used as a fallback.
+Coefficients use U_N = sum(a_j U_j), with M_2=1/2. The two-point
+construction matches the Maxwellian response at zero and infinity.
 """
 
 from __future__ import annotations
@@ -42,7 +9,6 @@ from __future__ import annotations
 from math import factorial
 
 import numpy as np
-
 
 SQRT_PI = float(np.sqrt(np.pi))
 
@@ -98,10 +64,10 @@ def pade_coefficients(N: int) -> np.ndarray:
     U_0/Phi to Z'(xi) (the correct kinetic target).
     """
     if N == 3:
-        chi1 = 2.0 / SQRT_PI          # = 2/sqrt(pi)
-        a0   =  0.5j * chi1            # = i/sqrt(pi)
-        a1   =  1.5                    # = 3/2
-        a2   = -1j  * chi1            # = -2i/sqrt(pi)
+        chi1 = 2.0 / SQRT_PI  # = 2/sqrt(pi)
+        a0 = 0.5j * chi1  # = i/sqrt(pi)
+        a1 = 1.5  # = 3/2
+        a2 = -1j * chi1  # = -2i/sqrt(pi)
         return np.array([a0, a1, a2], dtype=complex)
 
     # General N: Taylor matching at xi=0 for Z'(xi)
@@ -115,73 +81,6 @@ def pade_coefficients(N: int) -> np.ndarray:
         b[k] = Q[N, k] + (c[k - N] if k - N >= 0 else 0.0)
     return np.linalg.solve(A, b)
 
-
-def aaa_coefficients_n4() -> np.ndarray:
-    """N=4 closure coefficients from an AAA rational fit to Z'(xi), least-
-    squares projected onto the N=4 moment-closure family.
-
-    Unlike pade_coefficients(3) (HP: matched at exactly 2 points, xi=0 and
-    xi->infinity) or pade_coefficients(N!=3) (Taylor-matched at the single
-    point xi=0), this targets a GLOBAL fit over the real axis:
-
-      1. scipy.interpolate.AAA(max_terms=5) fits Z'(xi) for xi in [-6,6]
-         (real axis; AAA greedily selects support points to minimize
-         absolute error, so a real-valued domain is used to avoid the
-         exponential blow-up of Z' for large negative Im(xi) dominating
-         the fit).  This recovers 4 poles and 4 residues, matching Z' to
-         ~1-5% relative error at O(1) |xi| (vs HP's 25-70% there) -- but
-         that AAA rational function has 2*4-1=7 complex degrees of freedom
-         (poles AND residues both free), strictly more than this closure
-         family's N=4 complex dof (residues are NOT independently free
-         here -- fixing the closure's implied poles via the moment
-         recursion also fixes its residues, so matching AAA's poles alone
-         gives only ~20-25% accuracy, no better than HP).
-      2. So a_0..a_3 are instead found by nonlinear least-squares,
-         directly minimizing |fluid_U0(xi; a) - Z'(xi)| / (|Z'(xi)|+0.3)
-         over 300 points on xi in [-4.5, 4.5] (scipy.optimize.least_squares,
-         multiple random restarts around a HP-extended initial guess).
-
-    Result: median relative error ~1.6% on the real axis (matching AAA's
-    own quality there), degrading off-axis with growing |Im(xi)| (since the
-    fit only used real-axis data) -- e.g. ~7% at xi=1.512-0.297j, ~21% at
-    xi=0.580-0.461j -- still a large improvement over HP N=3's 64-68% at
-    those same points.  Coefficients alternate real/imaginary (a_0, a_2
-    real; a_1, a_3 imaginary), the same parity pattern as HP's own
-    (a_0, a_2 imaginary; a_1 real) -- both reflect Z'(-conj(xi)) =
-    conj(Z'(xi)).
-    """
-    return np.array([-2.08597030, 5.06030815j, 5.61145296, -2.92600838j],
-                    dtype=complex)
-
-
-def fluid_U0(xi, a) -> np.ndarray:
-    """Closed fluid response U_0(xi)/Phi for closure U_N = sum_i a_i U_i.
-
-    Builds and solves the moment system at every xi:
-        rows 0..N-2:  xi U_n - U_{n+1} = n M_{n-1} Phi
-        row    N-1:   xi U_{N-1} - sum a_i U_i = (N-1) M_{N-2} Phi
-    Phi normalized to 1.
-    """
-    a = np.asarray(a, dtype=complex)
-    N = len(a)
-    xi = np.asarray(xi, dtype=complex)
-    M = np.zeros(xi.shape + (N, N), dtype=complex)
-    b = np.zeros(N, dtype=complex)
-    for n in range(N - 1):
-        M[..., n, n] = xi
-        M[..., n, n + 1] = -1.0
-        b[n] = n * maxwellian_moment(n - 1) if n > 0 else 0.0
-    M[..., N - 1, N - 1] = xi
-    M[..., N - 1, :] -= a          # fix: broadcast correctly for scalar and array xi
-    b[N - 1] = (N - 1) * maxwellian_moment(N - 2) if N > 0 else 0.0
-    U = np.linalg.solve(M, b)
-    return U[..., 0]
-
-
-# ---------------------------------------------------------------------------
-# Two-point (HP / Hunana style) construction: n_zero conditions at xi = 0 and
-# the rest against the large-argument asymptotic series of Z'.
-# ---------------------------------------------------------------------------
 
 def _zprime_asymptotic(M: int) -> np.ndarray:
     """s_1..s_M with Z'(xi) ~ sum_m s_m xi^{-2m} = 1/xi^2 + 3/(2 xi^4) + ...
@@ -204,7 +103,7 @@ def _zero_rows(N: int, n_zero: int) -> tuple[np.ndarray, np.ndarray]:
     """
     K = max(n_zero, N + 1)
     c = _zprime_taylor(K)
-    Q = _Q_taylor(N, K)                       # Q_i = -q_i (sign convention)
+    Q = _Q_taylor(N, K)  # Q_i = -q_i (sign convention)
     A = np.zeros((n_zero, N), dtype=complex)
     b = np.zeros(n_zero, dtype=complex)
     for k in range(n_zero):
@@ -240,8 +139,7 @@ def _inf_rows(N: int, n_rows: int) -> tuple[np.ndarray, np.ndarray]:
     rows, rhs = [], []
     p = N - 2
     while len(rows) < n_rows and p > -2 * (N + n_rows):
-        row = np.array([s_at(i - p) - _coef(qs[i], p) for i in range(N)],
-                       dtype=complex)
+        row = np.array([s_at(i - p) - _coef(qs[i], p) for i in range(N)], dtype=complex)
         val = s_at(N - p) - _coef(qs[N], p)
         if np.any(np.abs(row) > 1e-13) or abs(val) > 1e-13:
             rows.append(row)

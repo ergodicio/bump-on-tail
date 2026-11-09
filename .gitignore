@@ -1,23 +1,9 @@
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
-.env
-
-# LaTeX build artifacts
-*.aux
-*.fdb_latexmk
-*.fls
-*.log
-*.out
-*.nav
-*.snm
-*.toc
-*.synctex.gz
-
-# macOS
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
 .DS_Store
-
-# Editor
-.vscode/
-.idea/

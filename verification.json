@@ -1,0 +1,270 @@
+{
+  "source_commit": "1fc7b4167aee968678262c712c86087df558fcae",
+  "environment": {
+    "python": "3.12.2",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "matplotlib": "3.9.2",
+    "jax": "0.5.3",
+    "equinox": "0.12.2",
+    "optax": "0.2.8",
+    "platform": "macOS CPU, JAX default 32-bit"
+  },
+  "original_driver_comparison": {
+    "twomode_0_kinetic": {
+      "max_absolute": 4.336808689942018e-19,
+      "relative_to_peak": 2.1684043449710089e-16
+    },
+    "twomode_0_hp3": {
+      "max_absolute": 8.673617379884035e-19,
+      "relative_to_peak": 4.3368086899420177e-16
+    },
+    "twomode_0_hunana4": {
+      "max_absolute": 1.0842021724855044e-18,
+      "relative_to_peak": 5.421010862427522e-16
+    },
+    "twomode_0_opt3": {
+      "max_absolute": 8.673617379884035e-19,
+      "relative_to_peak": 4.3368086899420177e-16
+    },
+    "twomode_0_opt4": {
+      "max_absolute": 1.5856456772600502e-18,
+      "relative_to_peak": 7.928228386300251e-16
+    },
+    "twomode_0_beta2": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "twomode_0_nn3h": {
+      "max_absolute": 2.3494476492341015e-11,
+      "relative_to_peak": 1.1747238246170508e-08
+    },
+    "twomode_0_nn4h": {
+      "max_absolute": 6.471215815810616e-12,
+      "relative_to_peak": 3.235607907905308e-09
+    },
+    "twomode_1_kinetic": {
+      "max_absolute": 8.673617379884035e-19,
+      "relative_to_peak": 4.3368086899420177e-16
+    },
+    "twomode_1_hp3": {
+      "max_absolute": 1.951563910473908e-18,
+      "relative_to_peak": 9.75781955236954e-16
+    },
+    "twomode_1_hunana4": {
+      "max_absolute": 2.9544509200229996e-18,
+      "relative_to_peak": 1.4772254600114998e-15
+    },
+    "twomode_1_opt3": {
+      "max_absolute": 1.5178830414797062e-18,
+      "relative_to_peak": 7.589415207398531e-16
+    },
+    "twomode_1_opt4": {
+      "max_absolute": 1.7889335846010823e-18,
+      "relative_to_peak": 8.944667923005412e-16
+    },
+    "twomode_1_beta2": {
+      "max_absolute": 9.092898688774914e-19,
+      "relative_to_peak": 4.546449344387457e-16
+    },
+    "twomode_1_nn3h": {
+      "max_absolute": 9.332234055079054e-12,
+      "relative_to_peak": 4.666117027539527e-09
+    },
+    "twomode_1_nn4h": {
+      "max_absolute": 7.52387209609559e-12,
+      "relative_to_peak": 3.761936048047795e-09
+    },
+    "standing_0_kinetic": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_hp3": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_hunana4": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_opt3": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_opt4": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_beta2": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_nn3h": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "standing_0_nn4h": {
+      "max_absolute": 0.0,
+      "relative_to_peak": 0.0
+    },
+    "coverage_max_error": 0.0
+  },
+  "regenerated_caches": {
+    "validation_kappa.npz": {
+      "t": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "E_kin": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "E_hp": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "E_ekr2": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "g_hp": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "g_maxw": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "g_kin": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "g_ekr": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      }
+    },
+    "validation_itg_trace.npz": {
+      "itg1_params": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "t_itg1": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "itg1_kin": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "itg1_hp": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "itg1_beta": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "itg1_zeta_kin": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      }
+    },
+    "validation_itg_scan.npz": {
+      "eta_curve": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "eta_fit": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "z_kin": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "z_hp": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "fit_kin": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "fit_hp": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      },
+      "fit_beta": {
+        "max_absolute": 0.0,
+        "relative_to_peak": 0.0
+      }
+    },
+    "growth_scan.npz": {
+      "u_b_vals": {
+        "max_absolute": 0.0
+      },
+      "eps_vals": {
+        "max_absolute": 0.0
+      },
+      "k_star": {
+        "max_absolute": 0.0
+      },
+      "gamma_kin": {
+        "max_absolute": 0.0
+      },
+      "gamma_kin_eig": {
+        "max_absolute": 0.0
+      },
+      "gamma_kin_exact": {
+        "max_absolute": 0.0
+      },
+      "gamma_hp3": {
+        "max_absolute": 0.0
+      },
+      "gamma_hunana4": {
+        "max_absolute": 0.0
+      },
+      "gamma_opt3": {
+        "max_absolute": 0.0
+      },
+      "gamma_opt4": {
+        "max_absolute": 0.0
+      },
+      "gamma_beta2": {
+        "max_absolute": 0.0
+      },
+      "gamma_nn3h": {
+        "max_absolute": 0.0
+      },
+      "gamma_nn4h": {
+        "max_absolute": 0.0
+      }
+    }
+  },
+  "learned_pade_refit": {
+    "frequencies_per_order": 600191,
+    "max_coefficient_errors": {
+      "3": 4.288e-11,
+      "4": 4.265e-11
+    }
+  },
+  "training": "Checkpoint deserialization and two-step optimizer/save/load smoke test; full retraining not repeated",
+  "automated_checks": {
+    "pytest": "9 passed",
+    "ruff": "F and I checks passed",
+    "git_diff_check": "passed",
+    "wheel_build": "passed",
+    "wheel_install_and_six_figures": "passed from outside the source checkout",
+    "training_cli": "64 samples, two updates, checkpoint and provenance written"
+  },
+  "final_source_full_reproduction": {
+    "coverage.npz": 0.0,
+    "growth_scan.npz": 0.0,
+    "standing.npz": 0.0,
+    "twomode.npz": 0.0,
+    "validation_itg_scan.npz": 0.0,
+    "validation_itg_trace.npz": 0.0,
+    "validation_kappa.npz": 0.0
+  }
+}
